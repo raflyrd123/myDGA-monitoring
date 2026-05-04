@@ -4,12 +4,12 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 import Image from 'next/image';
-import { supabase } from '../lib/supabase'; // Menggunakan inisialisasi supabase client
+import { supabase } from '../lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
   
-  // States untuk menampung input dan status login
+  // States untuk manajemen input dan loading
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,25 +22,25 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      // 1. Proses Login menggunakan Supabase Auth
+      // 1. Eksekusi Login ke Supabase Auth
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: email,
         password: password,
       });
 
       if (authError) {
-        // Jika gagal, tampilkan pesan error
+        // Tampilkan pesan error jika kredensial tidak valid[cite: 2]
         setError('Invalid login credentials. Please check your email and password.');
         setIsLoading(false);
       } else if (data.user) {
-        // 2. Sinkronisasi Session: Refresh router agar session dikenali oleh sistem
+        // 2. Refresh router untuk memastikan session terbaru terdaftar di sisi server[cite: 2]
         router.refresh();
         
-        // 3. Berikan jeda singkat (300ms) agar cookie benar-benar tersimpan di browser
-        // sebelum dipaksa pindah halaman agar tidak ditendang balik oleh Middleware
+        // 3. JURUS FINAL: Redirect langsung ke path /dashboard dengan sedikit jeda
+        // agar cookie session sempat tertanam sempurna di browser[cite: 2]
         setTimeout(() => {
-          window.location.href = '/'; 
-        }, 300);
+          window.location.href = '/dashboard'; 
+        }, 500);
       }
     } catch (err) {
       setError('An unexpected error occurred. Please try again.');
@@ -51,7 +51,7 @@ export default function LoginPage() {
   return (
     <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden font-sans">
       
-      {/* Background Image login page */}
+      {/* Background Image Page Login[cite: 2] */}
       <div 
         className="absolute inset-0 z-0 bg-cover bg-center transition-transform duration-1000" 
         style={{ backgroundImage: "url('/bg-login.png')" }} 
@@ -59,10 +59,10 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-black/20"></div>
       </div>
 
-      {/* Container Utama UI myDGA */}
+      {/* Container Utama UI myDGA[cite: 2] */}
       <div className="relative z-10 flex w-full max-w-[1280px] px-16 items-center justify-center gap-24 transition-all duration-300">
         
-        {/* SISI KIRI: Branding Section (Telkom & Sisgrid) */}
+        {/* SISI KIRI: Branding Section[cite: 2] */}
         <div className="flex flex-col items-center w-[500px] text-center group">
           
           <div className="flex items-center justify-center gap-8 mb-12 opacity-90 group-hover:opacity-100 transition-opacity duration-500">
@@ -97,7 +97,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* SISI KANAN: Login Card */}
+        {/* SISI KANAN: Login Card[cite: 2] */}
         <div className={`bg-white rounded-[45px] p-18 w-full max-w-[630px] shadow-2xl flex-shrink-0 border border-gray-100 py-20 transform transition-all duration-500 hover:shadow-[0_20px_50px_rgba(45,54,94,0.15)] ${error ? 'border-red-200' : ''}`}>
           
           <div className="mb-8 px-6 text-left">
@@ -107,7 +107,7 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Alert jika terjadi kesalahan login */}
+          {/* Alert Error jika login gagal[cite: 2] */}
           {error && (
             <div className="mx-6 mb-6 flex items-center gap-3 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl animate-in fade-in slide-in-from-top-2">
               <AlertCircle size={20} />

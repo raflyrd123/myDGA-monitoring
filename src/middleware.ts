@@ -65,9 +65,12 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Izinkan akses publik untuk favicon.png
+     * Izinkan akses tanpa login untuk:
+     * 1. Halaman /login
+     * 2. File statis internal (_next)
+     * 3. Semua file gambar (png, jpg, jpeg, gif, svg)
+     * 4. File ikon (favicon.png, favicon.ico)
      */
-// Potongan kode di middleware.ts
-'/((?!login|api|_next/static|_next/image|favicon.png|images|icons).*)',
+    '/((?!login|api|_next/static|_next/image|favicon.png|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg)$).*)',
   ],
 }

@@ -2,14 +2,12 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  // 1. Inisialisasi respons dasar
   let response = NextResponse.next({
     request: {
       headers: request.headers,
     },
   })
 
-  // 2. Konfigurasi Client Supabase khusus Server (Middleware)
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -19,7 +17,6 @@ export async function middleware(request: NextRequest) {
           return request.cookies.get(name)?.value
         },
         set(name: string, value: string, options: CookieOptions) {
-          // Update cookies di request dan response agar session tetap sinkron
           request.cookies.set({ name, value, ...options })
           response = NextResponse.next({
             request: {
@@ -41,36 +38,27 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // 3. Cek Session User
-  const { data: { session } } = await supabase.auth.getSession()
+  // GANTI getSession() dengan getUser() agar lebih cepat dan aman untuk middleware
+  const { data: { user } } = await supabase.auth.getUser()
 
-  // 4. LOGIKA LOCKDOWN: 
-  // Jika TIDAK ada session dan user TIDAK sedang di halaman /login, 
-  // paksa pindah ke /login
-  if (!session && !request.nextUrl.pathname.startsWith('/login')) {
+  // Jika tidak ada user dan bukan di login, tendang ke /login
+  if (!user && !request.nextUrl.pathname.startsWith('/login')) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // 5. LOGIKA LOGOUT/ALREADY LOGGED IN:
-  // Jika SUDAH ada session dan user coba buka halaman /login lagi,
-  // langsung lempar ke dashboard utama
-  if (session && request.nextUrl.pathname.startsWith('/login')) {
+  // Jika sudah ada user dan di login, lempar ke /dashboard
+  if (user && request.nextUrl.pathname.startsWith('/login')) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
   return response
 }
 
-// 6. KONFIGURASI MATCHER (SATTPAM GERBANG UTAMA)
 export const config = {
   matcher: [
     /*
-     * Izinkan semua file statis dan halaman login:
-     * 1. /login
-     * 2. api (jalur backend)
-     * 3. _next (file sistem internal)
-     * 4. File dengan ekstensi (titik), misal: logo.png, favicon.ico, dll.
+     * Daftar pengecualian yang lebih spesifik agar favicon.png dan aset lainnya aman:
      */
-    '/((?!login|api|_next/static|_next/image|.*\\..*).*)',
+    '/((?!api|_next/static|_next/image|login|favicon.png|favicon.ico|logo.png|images|.*\\..*).*)',
   ],
 }

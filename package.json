@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.105.1",
     "apexcharts": "^5.10.6",
     "chart.js": "^4.5.1",

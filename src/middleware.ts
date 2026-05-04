@@ -65,9 +65,9 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Tambahkan pengecualian untuk folder asset gambar lo.
-     * Di sini gue tambahin 'images' dan 'icons' biar aman.
+     * Izinkan akses publik untuk favicon.png
      */
-    '/((?!login|api|_next/static|_next/image|images|icons|favicon.ico|sitemap.xml|robots.txt).*)',
+// Potongan kode di middleware.ts
+'/((?!login|api|_next/static|_next/image|favicon.png|images|icons).*)',
   ],
 }

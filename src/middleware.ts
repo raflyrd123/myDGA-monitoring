@@ -47,7 +47,10 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Izinkan folder sistem dan SEMUA file statis agar gambar tidak 404[cite: 1]
-    '/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)',
+    /*
+     * Izinkan semua file statis agar gambar tim SISGRID tidak 404.
+     * Regex ini mengecualikan api, _next, dan file dengan ekstensi gambar.[cite: 1]
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

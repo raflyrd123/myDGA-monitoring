@@ -57,8 +57,13 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Daftar pengecualian yang lebih spesifik agar favicon.png dan aset lainnya aman:
+     * Mode Super Aman: Cuma proteksi dashboard dan halaman utama.
+     * Biarkan file statis (favicon, images) bebas lewat tanpa dicek.
      */
-    '/((?!api|_next/static|_next/image|login|favicon.png|favicon.ico|logo.png|images|.*\\..*).*)',
+    '/dashboard/:path*',
+    '/notifications/:path*',
+    '/analytics/:path*',
+    '/reports/:path*',
+    '/settings/:path*',
   ],
 }

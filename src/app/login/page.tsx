@@ -4,12 +4,12 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 import Image from 'next/image';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase'; // Memastikan menggunakan createBrowserClient dari @supabase/ssr
 
 export default function LoginPage() {
   const router = useRouter();
   
-  // States untuk manajemen input dan loading
+  // States
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,24 +22,24 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      // 1. Eksekusi Login ke Supabase Auth
+      // 1. Proses Login menggunakan Supabase Auth[cite: 2]
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: email,
         password: password,
       });
 
       if (authError) {
-        // Tampilkan pesan error jika kredensial tidak valid[cite: 2]
+        // Tampilkan pesan error spesifik jika gagal[cite: 2]
         setError('Invalid login credentials. Please check your email and password.');
         setIsLoading(false);
       } else if (data.user) {
-        // 2. Refresh router untuk memastikan session terbaru terdaftar di sisi server[cite: 2]
+        // 2. Sinkronisasi Session: Paksa router untuk refresh state[cite: 2]
         router.refresh();
         
-        // 3. JURUS FINAL: Redirect langsung ke path /dashboard dengan sedikit jeda
-        // agar cookie session sempat tertanam sempurna di browser[cite: 2]
+        // 3. Redirect ke root ('/') karena file dashboard myDGA ada di src/app/page.tsx[cite: 2]
+        // Memberikan jeda 500ms agar cookie benar-benar tersimpan di browser[cite: 2]
         setTimeout(() => {
-          window.location.href = '/dashboard'; 
+          window.location.href = '/'; 
         }, 500);
       }
     } catch (err) {
@@ -51,7 +51,7 @@ export default function LoginPage() {
   return (
     <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden font-sans">
       
-      {/* Background Image Page Login[cite: 2] */}
+      {/* 1. Background Image[cite: 2] */}
       <div 
         className="absolute inset-0 z-0 bg-cover bg-center transition-transform duration-1000" 
         style={{ backgroundImage: "url('/bg-login.png')" }} 
@@ -59,12 +59,13 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-black/20"></div>
       </div>
 
-      {/* Container Utama UI myDGA[cite: 2] */}
+      {/* Container Utama[cite: 2] */}
       <div className="relative z-10 flex w-full max-w-[1280px] px-16 items-center justify-center gap-24 transition-all duration-300">
         
         {/* SISI KIRI: Branding Section[cite: 2] */}
         <div className="flex flex-col items-center w-[500px] text-center group">
           
+          {/* Logo Barisan Atas (Telkom & Sisgrid)[cite: 2] */}
           <div className="flex items-center justify-center gap-8 mb-12 opacity-90 group-hover:opacity-100 transition-opacity duration-500">
             <div className="relative w-32 h-20 hover:scale-105 transition-transform duration-300">
               <Image src="/logo-telkom.png" alt="Telkom University" fill className="object-contain" />
@@ -77,6 +78,7 @@ export default function LoginPage() {
             </div>
           </div>
           
+          {/* Logo Grafis DGA & Teks[cite: 2] */}
           <div className="flex flex-col items-center">
              <div className="relative w-64 h-64 mb-6 drop-shadow-2xl hover:scale-110 transition-transform duration-500 ease-in-out cursor-pointer">
                 <Image src="/logo-dga.png" alt="myDGA" fill className="object-contain" />
@@ -92,7 +94,8 @@ export default function LoginPage() {
              </div>
           </div>
           
-          <p className="text-white italic text-xs mt-24 font-light opacity-60">
+          {/* Footer Text[cite: 2] */}
+          <p className="text-white italic text-xs mt-24 font-light opacity-60 hover:opacity-100 transition-opacity cursor-default">
             Created by Sisgrid Laboratory Research Team
           </p>
         </div>
@@ -107,7 +110,7 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Alert Error jika login gagal[cite: 2] */}
+          {/* Alert Error Peringatan[cite: 2] */}
           {error && (
             <div className="mx-6 mb-6 flex items-center gap-3 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl animate-in fade-in slide-in-from-top-2">
               <AlertCircle size={20} />
@@ -117,19 +120,19 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-6 px-6">
             <div className="space-y-2 group text-left">
-              <label className="text-[#2D365E] font-bold text-lg block ml-1">Email</label>
+              <label className="text-[#2D365E] font-bold text-lg block ml-1 transition-colors group-focus-within:text-[#4A55A2]">Email</label>
               <input 
                 type="email" 
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Input your email" 
-                className={`w-full px-6 py-4 rounded-[12px] border-[3px] outline-none text-[#2D365E] text-lg font-medium transition-all ${error ? 'border-red-400 bg-red-50/30' : 'border-[#2D365E] focus:border-[#4A55A2] hover:border-[#4A55A2]'}`}
+                className={`w-full px-6 py-4 rounded-[12px] border-[3px] outline-none text-[#2D365E] text-lg font-medium placeholder:text-gray-300 transition-all ${error ? 'border-red-400 bg-red-50/30' : 'border-[#2D365E] focus:border-[#4A55A2] focus:ring-4 focus:ring-[#4A55A2]/10 hover:border-[#4A55A2]'}`}
               />
             </div>
 
             <div className="space-y-2 relative group text-left">
-              <label className="text-[#2D365E] font-bold text-lg block ml-1">Password</label>
+              <label className="text-[#2D365E] font-bold text-lg block ml-1 transition-colors group-focus-within:text-[#4A55A2]">Password</label>
               <div className="relative">
                 <input 
                   type={showPassword ? "text" : "password"}
@@ -137,12 +140,12 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Input Password" 
-                  className={`w-full px-6 py-4 rounded-[12px] border-[3px] outline-none text-[#2D365E] text-lg font-medium transition-all ${error ? 'border-red-400 bg-red-50/30' : 'border-[#2D365E] focus:border-[#4A55A2] hover:border-[#4A55A2]'}`}
+                  className={`w-full px-6 py-4 rounded-[12px] border-[3px] outline-none text-[#2D365E] text-lg font-medium placeholder:text-gray-300 transition-all ${error ? 'border-red-400 bg-red-50/30' : 'border-[#2D365E] focus:border-[#4A55A2] focus:ring-4 focus:ring-[#4A55A2]/10 hover:border-[#4A55A2]'}`}
                 />
                 <button 
                   type="button" 
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-6 top-1/2 -translate-y-1/2 text-[#2D365E] opacity-60 hover:opacity-100 p-1"
+                  className="absolute right-6 top-1/2 -translate-y-1/2 text-[#2D365E] opacity-60 hover:opacity-100 transition-opacity p-1 hover:bg-gray-100 rounded-full"
                 >
                   {showPassword ? <EyeOff size={24} /> : <Eye size={24} />}
                 </button>
@@ -152,7 +155,7 @@ export default function LoginPage() {
             <button 
               type="submit" 
               disabled={isLoading}
-              className="w-full bg-[#2D365E] text-white py-4 rounded-full text-2xl font-bold hover:bg-[#1B2559] transition-all mt-6 shadow-xl active:scale-[0.98] flex justify-center items-center"
+              className="w-full bg-[#2D365E] text-white py-4 rounded-full text-2xl font-bold hover:bg-[#1B2559] transition-all mt-6 shadow-xl active:scale-[0.98] hover:shadow-[0_10px_25px_rgba(45,54,94,0.3)] hover:-translate-y-1 disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center"
             >
               {isLoading ? (
                 <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>

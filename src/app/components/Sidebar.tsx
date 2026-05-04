@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-// Tambahkan Bell untuk icon Notifikasi
+import { supabase } from '../lib/supabase'; // Pastikan path import ini benar
 import { 
   LayoutDashboard, 
   BarChart3, 
@@ -29,6 +29,22 @@ export const Sidebar = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // Fungsi Logout yang Sinkron dengan Middleware
+  const handleLogout = async () => {
+    try {
+      // 1. Hapus session di Supabase
+      await supabase.auth.signOut();
+      
+      // 2. Refresh router agar middleware sadar session sudah habis[cite: 2]
+      router.refresh();
+      
+      // 3. Paksa pindah ke login dan bersihkan sisa session di browser[cite: 2]
+      window.location.href = '/login';
+    } catch (error) {
+      console.error("Error logging out:", error);
+    }
+  };
+
   const formatDay = (date: Date) => date.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
   const formatTime = (date: Date) => date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
 
@@ -46,7 +62,6 @@ export const Sidebar = () => {
       ]
     },
     { name: 'Reports', path: '/reports', icon: <FileText size={20} /> },
-    // MENU NOTIFICATIONS BARU
     { name: 'Notifications', path: '/notifications', icon: <Bell size={20} /> },
     { name: 'Settings', path: '/settings', icon: <Settings size={20} /> },
     { name: 'About Us', path: '/about', icon: <Info size={20} /> },
@@ -123,8 +138,9 @@ export const Sidebar = () => {
           )}
         </div>
 
+        {/* Update Tombol Logout menggunakan fungsi handleLogout[cite: 2] */}
         <button 
-          onClick={() => router.push('/login')}
+          onClick={handleLogout}
           className="flex items-center gap-4 px-4 py-3 w-full text-red-400 hover:bg-red-500/10 rounded-xl transition-all duration-300 group"
         >
           <LogOut size={20} className="group-hover:translate-x-1 transition-transform" />

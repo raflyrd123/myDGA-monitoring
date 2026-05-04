@@ -11,7 +11,7 @@ export default function LoginPage() {
   
   // States
   const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState(''); // Menggunakan email sesuai standar Supabase Auth
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -22,19 +22,24 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      // Logika Login Real menggunakan Supabase Auth
+      // 1. Proses Login ke Supabase
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: email,
         password: password,
       });
 
       if (authError) {
-        // Jika akun salah atau tidak terdaftar, tampilkan pesan error
         setError('Invalid login credentials. Please check your email and password.');
         setIsLoading(false);
       } else if (data.user) {
-        // Jika berhasil, arahkan ke dashboard
-        router.push('/');
+        // 2. CRITICAL: Refresh router untuk sinkronisasi session dengan Middleware
+        router.refresh();
+        
+        // 3. Berikan delay singkat (100-200ms) agar cookie session benar-benar tersimpan 
+        // sebelum pindah halaman ke dashboard/root
+        setTimeout(() => {
+          router.push('/');
+        }, 150);
       }
     } catch (err) {
       setError('An unexpected error occurred. Please try again.');
@@ -45,7 +50,7 @@ export default function LoginPage() {
   return (
     <div className="relative min-h-screen w-full flex items-center justify-center overflow-hidden font-sans">
       
-      {/* 1. Background Image */}
+      {/* Background Image */}
       <div 
         className="absolute inset-0 z-0 bg-cover bg-center transition-transform duration-1000" 
         style={{ backgroundImage: "url('/bg-login.png')" }} 
@@ -59,21 +64,18 @@ export default function LoginPage() {
         {/* SISI KIRI: Branding Section */}
         <div className="flex flex-col items-center w-[500px] text-center group">
           
-{/* Logo Barisan Atas */}
-<div className="flex items-center justify-center gap-8 mb-12 opacity-90 group-hover:opacity-100 transition-opacity duration-500">
-  {/* Logo Telkom */}
-  <div className="relative w-32 h-20 hover:scale-105 transition-transform duration-300">
-    <Image src="/logo-telkom.png" alt="Telkom University" fill className="object-contain" />
-  </div>
+          {/* Logo Barisan Atas */}
+          <div className="flex items-center justify-center gap-8 mb-12 opacity-90 group-hover:opacity-100 transition-opacity duration-500">
+            <div className="relative w-32 h-20 hover:scale-105 transition-transform duration-300">
+              <Image src="/logo-telkom.png" alt="Telkom University" fill className="object-contain" />
+            </div>
 
-  {/* Garis Pembatas - Dibuat elemen terpisah agar kontrol jaraknya enak */}
-  <div className="h-12 w-[2px] bg-white/20"></div>
+            <div className="h-12 w-[2px] bg-white/20"></div>
 
-  {/* Logo Sisgrid */}
-  <div className="relative w-32 h-20 hover:scale-105 transition-transform duration-300">
-    <Image src="/logo-sisgrid.png" alt="Sisgrid Laboratory" fill className="object-contain" />
-  </div>
-</div>
+            <div className="relative w-32 h-20 hover:scale-105 transition-transform duration-300">
+              <Image src="/logo-sisgrid.png" alt="Sisgrid Laboratory" fill className="object-contain" />
+            </div>
+          </div>
           
           {/* Logo Grafis DGA & Teks */}
           <div className="flex flex-col items-center">
@@ -100,7 +102,7 @@ export default function LoginPage() {
         {/* SISI KANAN: Login Card */}
         <div className={`bg-white rounded-[45px] p-18 w-full max-w-[630px] shadow-2xl flex-shrink-0 border border-gray-100 py-20 transform transition-all duration-500 hover:shadow-[0_20px_50px_rgba(45,54,94,0.15)] ${error ? 'border-red-200' : ''}`}>
           
-          <div className="mb-8">
+          <div className="mb-8 px-6">
             <h2 className="text-5xl font-bold text-[#2D365E] mb-4 tracking-tight">Welcome!</h2>
             <p className="text-[#2D365E] text-lg font-normal leading-tight opacity-80">
               Enter the username and password according to the registered account.
@@ -109,13 +111,13 @@ export default function LoginPage() {
 
           {/* Alert Error Peringatan */}
           {error && (
-            <div className="mb-6 flex items-center gap-3 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl animate-in fade-in slide-in-from-top-2">
+            <div className="mx-6 mb-6 flex items-center gap-3 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl animate-in fade-in slide-in-from-top-2">
               <AlertCircle size={20} />
               <p className="text-sm font-semibold">{error}</p>
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={handleLogin} className="space-y-6 px-6">
             <div className="space-y-2 group">
               <label className="text-[#2D365E] font-bold text-lg block ml-1 transition-colors group-focus-within:text-[#4A55A2]">Email</label>
               <input 

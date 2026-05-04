@@ -65,12 +65,9 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Mencakup SEMUA route kecuali yang ada di daftar pengecualian:
-     * - login (halaman masuk)
-     * - api (jalur data/webhook)
-     * - _next/static & _next/image (file sistem tampilan)
-     * - favicon.ico (ikon tab browser)
+     * Tambahkan pengecualian untuk folder asset gambar lo.
+     * Di sini gue tambahin 'images' dan 'icons' biar aman.
      */
-    '/((?!login|api|_next/static|_next/image|favicon.ico).*)',
+    '/((?!login|api|_next/static|_next/image|images|icons|favicon.ico|sitemap.xml|robots.txt).*)',
   ],
 }

@@ -59,6 +59,7 @@ export const Sidebar = () => {
         { name: 'Gas Quality', path: '/analytics/gas-quality' },
         { name: 'Temperature', path: '/analytics/temperature' },
         { name: 'Humidity', path: '/analytics/humidity' },
+        { name: 'Network', path: '/analytics/network' },
       ]
     },
     { name: 'Reports', path: '/reports', icon: <FileText size={20} /> },

@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { SensorCard } from './components/SensorCard';
-import { supabase } from './lib/supabase'; // Sesuaikan path import library supabase lo
+import { supabase } from './lib/supabase'; // 🌟 FIX JALUR: Dikembalikan ke root lokal asli lo
 import Image from 'next/image';
 
-// 🌟 HOISTING GUARD: LegendItem diletakkan di luar agar 100% bebas dari ReferenceError
+// 🌟 HOISTING GUARD: LegendItem aman di luar scope utama agar bebas dari ReferenceError
 const LegendItem = ({ color, label, isDark = false }: { color: string, label: string, isDark?: boolean }) => (
   <div className="flex items-center gap-2">
     <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: color }}></div>
@@ -123,7 +123,7 @@ export default function DashboardPage() {
     setHumidityValue(data.humidity_pct || 0);
     setOilColorValue(data.oil_color_pct || 0);
     
-    // 🌟 SINKRON DATA FLOAT SWITCH: Langsung baca data string "ON"/"OFF" asli dari database raspi lo
+    // 🌟 REAL DATA SYNC: Masukkan status switch asli dari hardware tanpa rekayasa threshold
     setFloatStatus(data.safety_float || "OFF");
 
     if (currentSettings?.flood?.groundDistance && currentSettings.flood.groundDistance > 0) {
@@ -225,7 +225,6 @@ export default function DashboardPage() {
 
       {/* ENVIRONMENT ROW */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-10 text-white">
-        
         {/* TEMPERATURE CARD */}
         <div className="lg:col-span-5 bg-[#2D365E] rounded-[50px] p-10 flex flex-col items-center shadow-2xl relative min-h-[680px]">
           <div className="flex items-center gap-3 w-full justify-center mb-4">
@@ -238,7 +237,6 @@ export default function DashboardPage() {
           <div className="flex-grow flex items-center justify-center w-full relative">
             <div className="w-[600px] h-[600px]">{renderGauge(tempValue, (settings.temp?.crit || 120) + 10, curTemp.color, false, 14)}</div>
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                {/* Visual Desimal Breakdown High Fidelity Asli */}
                 <div className="relative flex items-center translate-x-[-5px] justify-center">
                     <h3 className="text-[130px] font-bold leading-none tracking-tighter">{Math.floor(tempValue)}</h3>
                     <div className="flex flex-col ml-1 items-start justify-center">
@@ -346,13 +344,13 @@ export default function DashboardPage() {
         </div>
         <div className="flex items-center justify-between w-full px-12 mb-8 text-[#2D365E]">
           
-          {/* Silinder Cairan Indikator Air Tinggi h-72 Gagah Pas Sesuai Layout */}
+          {/* Silinder Cairan Indikator Air Tinggi h-72 */}
           <div className="w-20 h-72 bg-[#E1E6E4] rounded-[32px] p-2 flex flex-col justify-end shadow-inner border-4 border-gray-50/50 relative overflow-hidden shrink-0">
             <div 
               className="w-full transition-all duration-1000 shadow-lg" 
               style={{ 
                 height: `${floodLevel}%`, 
-                backgroundColor: floatStatus === "ON" ? "#cb6060" : "#2ac764", // Mengikuti state alarm hardware pelampung asli
+                backgroundColor: floatStatus === "ON" ? "#cb6060" : "#2ac764", 
                 borderRadius: floodLevel > 88 ? '24px' : '0px 0px 24px 24px'
               }}
             ></div>
@@ -363,7 +361,6 @@ export default function DashboardPage() {
             <h3 className="text-[110px] font-bold leading-none tracking-tighter text-[#707070]">{floodText} <span className="text-3xl font-black text-gray-300">cm</span></h3>
           </div>
 
-          {/* SINKRONISASI AKTIF: Box status switch murni merefleksikan string data.safety_float dari database */}
           <div className="text-right">
             <p className="text-[#707070] font-bold text-[45px]">Switch Status:</p>
             <span 

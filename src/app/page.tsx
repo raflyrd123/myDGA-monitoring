@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { SensorCard } from './components/SensorCard';
-import { supabase } from './lib/supabase'; // 🌟 FIX JALUR: Dikembalikan ke root lokal asli lo
+import { supabase } from './lib/supabase'; // 🌟 JALUR LOKAL ASLI
 import Image from 'next/image';
 
 // 🌟 HOISTING GUARD: LegendItem aman di luar scope utama agar bebas dari ReferenceError
@@ -19,7 +19,7 @@ export default function DashboardPage() {
   const [humidityValue, setHumidityValue] = useState(0);
   const [oilColorValue, setOilColorValue] = useState(0);
   const [floodLevel, setFloodLevel] = useState(0); 
-  const [floodText, setFloodText] = useState("0");
+  const [floodText, setFloodText] = useState("0.00");
   
   // 🌟 REAL TELEMETRY STATE: Membaca status fisis asli dari float switch (ON/OFF)
   const [floatStatus, setFloatStatus] = useState("OFF");
@@ -122,15 +122,19 @@ export default function DashboardPage() {
     setTempValue(data.temperature_c || 0);
     setHumidityValue(data.humidity_pct || 0);
     setOilColorValue(data.oil_color_pct || 0);
-    
-    // 🌟 REAL DATA SYNC: Masukkan status switch asli dari hardware tanpa rekayasa threshold
     setFloatStatus(data.safety_float || "OFF");
 
     if (currentSettings?.flood?.groundDistance && currentSettings.flood.groundDistance > 0) {
-      const rawWaterCm = data.water_level_cm || 0;
-      const calcFloodPct = Math.max(0, Math.min(100, (rawWaterCm / currentSettings.flood.groundDistance) * 100));
+      const baseline = currentSettings.flood.groundDistance;
+      const sensorReading = data.water_level_cm || 0;
+      
+      // Logika Pembalik Nilas fisis ultrasonik tanki
+      const actualWaterHeightCm = Math.max(0, baseline - sensorReading);
+      const calcFloodPct = Math.max(0, Math.min(100, (actualWaterHeightCm / baseline) * 100));
+      
       setFloodLevel(calcFloodPct);
-      setFloodText(rawWaterCm.toString());
+      // 🌟 FIX: Diubah ke .toFixed(2) agar menampilkan minimal 2 digit presisi desibel belakang koma
+      setFloodText(actualWaterHeightCm.toFixed(2)); 
     }
 
     setGasData({
@@ -160,10 +164,17 @@ export default function DashboardPage() {
     return '#2ac7c7';
   };
 
-  const getFloodStatus = (pct: number) => {
-    if (pct <= (settings?.flood?.warnLevel || 30)) return { color: '#2ac764', label: 'Save' };
-    if (pct <= (settings?.flood?.critLevel || 70)) return { color: '#d8db26', label: 'Caution' };
-    return { color: '#cb6060', label: 'Danger' };
+  const getFloodStatus = (cm: number, currentFloatStatus: string) => {
+    const warnCm = settings?.flood?.warnLevel || 30; 
+    const critCm = settings?.flood?.critLevel || 70; 
+
+    if (cm > critCm && currentFloatStatus === "ON") {
+      return { color: '#cb6060', label: 'Danger' };
+    }
+    if (cm > warnCm) {
+      return { color: '#d8db26', label: 'Caution' };
+    }
+    return { color: '#2ac764', label: 'Safe' };
   };
 
   const getOilColorLabel = (val: number) => {
@@ -176,7 +187,7 @@ export default function DashboardPage() {
   if (!settings) return <div className="p-10 font-black uppercase opacity-20 text-[#2D365E]">Syncing Thresholds...</div>;
 
   const curTemp = getTempStatus(tempValue);
-  const curFlood = getFloodStatus(floodLevel);
+  const curFlood = getFloodStatus(parseFloat(floodText) || 0, floatStatus);
 
   const renderGauge = (value: number, total: number, color: string, isHalf: boolean = false, customStroke: number = 24) => {
     const radius = 80;
@@ -229,7 +240,7 @@ export default function DashboardPage() {
         <div className="lg:col-span-5 bg-[#2D365E] rounded-[50px] p-10 flex flex-col items-center shadow-2xl relative min-h-[680px]">
           <div className="flex items-center gap-3 w-full justify-center mb-4">
             <Image src="/icons/temperature.png?v=1" alt="Temp" width={44} height={44} unoptimized />
-            <h2 className="text-[23px] font-black tracking-tight text-center">
+            <h2 className="text-[22px] font-black tracking-tight text-center">
               {settings.temp?.displayMode === 'oil' ? 'Oil Transformer Temperature' : 'Transformer Body Temperature'}
             </h2>
           </div>
@@ -344,20 +355,21 @@ export default function DashboardPage() {
         </div>
         <div className="flex items-center justify-between w-full px-12 mb-8 text-[#2D365E]">
           
-          {/* Silinder Cairan Indikator Air Tinggi h-72 */}
+          {/* Silinder Indikator Air h-72 */}
           <div className="w-20 h-72 bg-[#E1E6E4] rounded-[32px] p-2 flex flex-col justify-end shadow-inner border-4 border-gray-50/50 relative overflow-hidden shrink-0">
             <div 
               className="w-full transition-all duration-1000 shadow-lg" 
               style={{ 
                 height: `${floodLevel}%`, 
-                backgroundColor: floatStatus === "ON" ? "#cb6060" : "#2ac764", 
+                backgroundColor: curFlood.color, 
                 borderRadius: floodLevel > 88 ? '24px' : '0px 0px 24px 24px'
               }}
             ></div>
           </div>
           
           <div className="flex flex-col items-start ml-8 flex-grow">
-            <p className="text-[60px] font-bold tracking-tight" style={{ color: floatStatus === "ON" ? "#cb6060" : "#2ac764" }}>{curFlood.label}</p>
+            <p className="text-[60px] font-bold tracking-tight" style={{ color: curFlood.color }}>{curFlood.label}</p>
+            {/* 🌟 AKTIF 2 ANGKA DESIMAL: Menampilkan tinggi air fisis riil koma lengkap */}
             <h3 className="text-[110px] font-bold leading-none tracking-tighter text-[#707070]">{floodText} <span className="text-3xl font-black text-gray-300">cm</span></h3>
           </div>
 
@@ -373,9 +385,9 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex justify-center gap-10 border-t border-gray-100 pt-6">
-           <LegendItem isDark color="#2ac764" label={`Save < ${settings.flood?.warnLevel || 30}%`} />
-           <LegendItem isDark color="#d8db26" label={`${settings.flood?.warnLevel || 30}% < Caution < ${settings.flood?.critLevel || 70}%`} />
-           <LegendItem isDark color="#cb6060" label={`Danger > ${settings.flood?.critLevel || 70}%`} />
+           <LegendItem isDark color="#2ac764" label={`Safe < ${settings.flood?.warnLevel || 30} cm`} />
+           <LegendItem isDark color="#d8db26" label={`${settings.flood?.warnLevel || 30} cm < Caution < ${settings.flood?.critLevel || 70} cm`} />
+           <LegendItem isDark color="#cb6060" label={`Danger > ${settings.flood?.critLevel || 70} cm & Switch ON`} />
            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-auto">Ground Ref: {settings.flood?.groundDistance || 300} cm</span>
         </div>
       </div>

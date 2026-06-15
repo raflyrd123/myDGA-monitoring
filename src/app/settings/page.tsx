@@ -34,7 +34,7 @@ export default function SettingsPage() {
         if (!fetchedValue.temp) {
           fetchedValue.temp = { warn: 80, crit: 120, displayMode: 'body' };
         } else if (fetchedValue.temp.displayMode === undefined) {
-          fetchedValue.temp.displayMode = 'body'; // Default ke kualifikasi Tugas Akhir kamu
+          fetchedValue.temp.displayMode = 'body'; 
         }
 
         if (!fetchedValue.gasThresholds) fetchedValue.gasThresholds = {};
@@ -215,7 +215,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Clean Air Rs (Ohm)</label>
-                  <input type="number" value={config.gasCalibration.tgs2611.cleanAirRs} onChange={(e) => setConfig({...config, gasCalibration: { ...config.gasCalibration, tgs2611: { ...config.gasCalibration.tgs2611, cleanAirRs: Number(e.target.value) } }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border outline-none" />
+                  <input type="number" value={config.gasCalibration.tgs2611.cleanAirRs} onChange={(e) => setConfig({...config, gasCalibration: { ...config.gasCalibration.tgs2611, cleanAirRs: Number(e.target.value) } })} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border outline-none" />
                 </div>
                 <div>
                   <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Air Factor Constant</label>
@@ -352,14 +352,13 @@ export default function SettingsPage() {
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             
-            {/* CARD SUHU - SEKARANG DENGAN TOGGLE LABEL SELEKSI */}
+            {/* CARD SUHU */}
             <div className="p-6 bg-[#F4F7FE] rounded-[35px] border border-gray-200/50 flex flex-col justify-between">
               <div>
                 <p className="font-black text-sm uppercase tracking-wider text-[#2D365E] border-b pb-2 mb-4 flex items-center gap-2">
                   <Database size={14} className="text-gray-400" /> Temperature Configuration
                 </p>
                 <div className="space-y-4">
-                  {/* 🌟 BARU: Seleksi Jenis Label Khusus Standar TA */}
                   <div>
                     <label className="text-[9px] font-black text-indigo-600 uppercase block mb-1">Dasbor Display Label (TA Opt)</label>
                     <select
@@ -458,11 +457,13 @@ export default function SettingsPage() {
                 <input type="number" value={config.flood.groundDistance} onChange={(e) => setConfig({...config, flood: { ...config.flood, groundDistance: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-black text-sm text-[#2D365E] border border-gray-200 outline-none" />
               </div>
               <div>
-                <label className="block text-[9px] font-black text-orange-500 uppercase mb-1.5">Caution Threshold Trigger (%)</label>
+                {/* 🌟 FIX VISUAL LABELS: Satuan diubah menjadi (CM) agar sinkron dengan kalkulasi dasbor baru */}
+                <label className="block text-[9px] font-black text-orange-500 uppercase mb-1.5">Caution Threshold Trigger (CM)</label>
                 <input type="number" value={config.flood.warnLevel} onChange={(e) => setConfig({...config, flood: { ...config.flood, warnLevel: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-black text-sm text-[#2D365E] border border-orange-200 outline-none" />
               </div>
               <div>
-                <label className="block text-[9px] font-black text-rose-500 uppercase mb-1.5">Danger Threshold Trigger (%)</label>
+                {/* 🌟 FIX VISUAL LABELS: Satuan diubah menjadi (CM) agar sinkron dengan kalkulasi dasbor baru */}
+                <label className="block text-[9px] font-black text-rose-500 uppercase mb-1.5">Danger Threshold Trigger (CM)</label>
                 <input type="number" value={config.flood.critLevel} onChange={(e) => setConfig({...config, flood: { ...config.flood, critLevel: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-black text-sm text-[#2D365E] border border-rose-200 outline-none" />
               </div>
               <div>

@@ -4,8 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, 
   Radar as RadarRecharts, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid 
-} from 'recharts';
-import { supabase } from '../../lib/supabase';
+} from 'recharts'; // 🌟 FIX PATH: Dikembalikan ke pustaka recharts asli lo
+import { supabase } from '../../lib/supabase'; // Hanya database target cloud di sini
 import Image from 'next/image';
 
 const CustomTooltip = ({ active, payload }: any) => {
@@ -54,43 +54,68 @@ export default function GasQualityPage() {
     let days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : 30;
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
     
-    const { data } = await supabase
-      .from('sensor_logs')
-      .select('*')
-      .gte('created_at', cutoff)
-      .order('created_at', { ascending: true });
+    // UNLIMITED ROW FETCH: Menarik data fisis gas secara berkala bypass batas 1000 baris Supabase
+    let allRawData: any[] = [];
+    let fromOffset = 0;
+    let keepFetching = true;
 
-    if (data && data.length > 0) {
-      const latest = data[data.length - 1];
+    while (keepFetching) {
+      const { data: chunk, error } = await supabase
+        .from('sensor_logs')
+        .select('*')
+        .gte('created_at', cutoff)
+        .order('created_at', { ascending: true })
+        .range(fromOffset, fromOffset + 999);
+
+      if (error || !chunk || chunk.length === 0) {
+        keepFetching = false;
+      } else {
+        allRawData = [...allRawData, ...chunk];
+        if (chunk.length < 1000) {
+          keepFetching = false;
+        } else {
+          fromOffset += 1000;
+        }
+      }
+    }
+
+    if (allRawData.length > 0) {
+      const latest = allRawData[allRawData.length - 1];
+      
+      // Radar Komposisi Rata-rata dari SELURUH data historis fisis koper DGA
       setRadarData([
-        { subject: 'Hydrogen', value: calculateAvg(data, 'hydrogen_h2') },
-        { subject: 'Methane', value: calculateAvg(data, 'methane_ch4') },
-        { subject: 'Ethane', value: calculateAvg(data, 'ethane_c2h6') },
-        { subject: 'Ethylene', value: calculateAvg(data, 'ethylene_c2h4') },
-        { subject: 'Acetylene', value: calculateAvg(data, 'acetylene_c2h2') },
-        { subject: 'CO', value: calculateAvg(data, 'carbon_monoxide_co') },
+        { subject: 'Hydrogen', value: calculateAvg(allRawData, 'hydrogen_h2') },
+        { subject: 'Methane', value: calculateAvg(allRawData, 'methane_ch4') },
+        { subject: 'Ethane', value: calculateAvg(allRawData, 'ethane_c2h6') },
+        { subject: 'Ethylene', value: calculateAvg(allRawData, 'ethylene_c2h4') },
+        { subject: 'Acetylene', value: calculateAvg(allRawData, 'acetylene_c2h2') },
+        { subject: 'CO', value: calculateAvg(allRawData, 'carbon_monoxide_co') },
       ]);
       
       runDiagnosis(latest.methane_ch4 || 0, latest.ethylene_c2h4 || 0, latest.acetylene_c2h2 || 0);
 
-      const trend = data.filter((_, index) => {
-        if (timeRange === '24h') return index % 5 === 0; 
-        if (timeRange === '7d') return index % 60 === 0; 
-        return index % 120 === 0; 
-      }).map(item => {
-        const d = new Date(item.created_at);
-        return {
-          displayX: timeRange === '24h' 
-            ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
-          fullDate: d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
-          fullTime: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-          value: item[selectedGas] || 0
-        };
-      });
+      // DYNAMIC DOWNSAMPLING STEP: Grafik seimbang memuat ~55 titik data biar meliuk padat & organik
+      const targetPoints = 55;
+      const dynamicStep = Math.ceil(allRawData.length / targetPoints) || 1;
+
+      const trend = allRawData
+        .filter((_, index) => index % dynamicStep === 0)
+        .map(item => {
+          const d = new Date(item.created_at);
+          return {
+            displayX: timeRange === '24h' 
+              ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+            fullDate: d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+            fullTime: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            value: item[selectedGas] || 0
+          };
+        });
+        
       setHistoryData(trend);
     } else {
-      setRadarData([]); setHistoryData([]);
+      setRadarData([]); 
+      setHistoryData([]);
       setDuval({ id: 'NONE', label: 'TIDAK ADA DATA', ch4p: 0, c2h4p: 0, c2h2p: 0 });
     }
     setLoading(false);
@@ -199,7 +224,6 @@ export default function GasQualityPage() {
           </div>
 
           <div className="w-full border-t border-white/10 pt-4 mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-white/50 font-medium">
-            {/* UPDATE FIXED: PD MERAH WOII SESUAI GAMBAR */}
             <div className="bg-black/10 p-2 rounded-xl border border-white/5"><span className="font-bold text-[#ff0000] block">PD (Corona)</span> CH4 ≥ 98%</div>
             <div className="bg-black/10 p-2 rounded-xl border border-white/5"><span className="font-bold text-[#ec4899] block">T1 (Thermal)</span> Temp &lt; 300°C</div>
             <div className="bg-black/10 p-2 rounded-xl border border-white/5"><span className="font-bold text-[#a855f7] block">T2 (Thermal)</span> 300°C - 700°C</div>
@@ -236,7 +260,6 @@ export default function GasQualityPage() {
                   axisLine={false} 
                   tickLine={false} 
                   tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} 
-                  interval={timeRange === '24h' ? 12 : 'preserveStartEnd'} 
                 />
                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} />
                 <RechartsTooltip content={<CustomTooltip />} />

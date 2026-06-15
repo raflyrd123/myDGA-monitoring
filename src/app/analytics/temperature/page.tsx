@@ -18,9 +18,9 @@ const CustomTooltip = ({ active, payload }: any) => {
           <span className="text-xs font-bold text-gray-500 uppercase">Timestamp</span>
           <span className="text-sm font-black text-[#2D365E]">{fullTime}</span>
         </div>
-        <div className="flex justify-between items-end border-t pt-2 mt-2">
+        <div className="flex justify-between items-end border-t border-gray-100 pt-2 mt-2">
           <span className="text-xs font-bold text-gray-500 uppercase">Temperature</span>
-          <span className="text-xl font-black text-[#2D365E]">{value.toFixed(1)}°C</span>
+          <span className="text-xl font-black text-[#2D365E]">{value.toFixed(2)}°C</span>
         </div>
       </div>
     );
@@ -34,6 +34,7 @@ export default function TemperatureAnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<any>(null);
   const [stats, setStats] = useState({ avg: 0, peak: 0, current: 0 });
+  const [yMaxLimit, setYMaxLimit] = useState(140); 
 
   useEffect(() => {
     fetchData();
@@ -54,38 +55,64 @@ export default function TemperatureAnalyticsPage() {
     let days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : 30;
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
     
-    const { data } = await supabase
-      .from('sensor_logs')
-      .select('temperature_c, created_at')
-      .gte('created_at', cutoff)
-      .order('created_at', { ascending: true });
+    let allRawData: any[] = [];
+    let fromOffset = 0;
+    let keepFetching = true;
 
-    if (data && data.length > 0) {
-      const temps = data.map(d => d.temperature_c || 0).filter(t => t > 0);
-      
-      if (temps.length > 0) {
+    while (keepFetching) {
+      const { data: chunk, error } = await supabase
+        .from('sensor_logs')
+        .select('temperature_c, created_at')
+        .gte('created_at', cutoff)
+        .order('created_at', { ascending: true })
+        .range(fromOffset, fromOffset + 999);
+
+      if (error || !chunk || chunk.length === 0) {
+        keepFetching = false;
+      } else {
+        allRawData = [...allRawData, ...chunk];
+        if (chunk.length < 1000) {
+          keepFetching = false;
+        } else {
+          fromOffset += 1000;
+        }
+      }
+    }
+
+    if (allRawData.length > 0) {
+      // 🌟 FIX DATA SANITIZATION: Di bawah 0°C dan di atas 500°C otomatis dikategorikan data error & dibuang
+      const validRawData = allRawData.filter(d => d.temperature_c !== null && d.temperature_c >= 0 && d.temperature_c <= 500);
+
+      if (validRawData.length > 0) {
+        const temps = validRawData.map(d => d.temperature_c);
+        
         const avg = temps.reduce((a, b) => a + b, 0) / temps.length;
         const peak = Math.max(...temps);
         const current = temps[temps.length - 1];
         setStats({ avg, peak, current });
-      }
 
-      const trend = data.filter((_, index) => {
-        if (timeRange === '24h') return index % 5 === 0;
-        if (timeRange === '7d') return index % 60 === 0;
-        return index % 120 === 0;
-      }).map(item => {
-        const d = new Date(item.created_at);
-        return {
-          displayX: timeRange === '24h' 
-            ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
-          fullDate: d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
-          fullTime: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-          value: item.temperature_c || 0
-        };
-      });
-      setHistoryData(trend);
+        const limitCrit = config?.value?.temp?.crit || 120;
+        setYMaxLimit(Math.ceil(Math.max(peak + 15, limitCrit + 20)));
+
+        const targetPoints = 55;
+        const dynamicStep = Math.ceil(validRawData.length / targetPoints) || 1;
+
+        const trend = validRawData
+          .filter((_, index) => index % dynamicStep === 0)
+          .map(item => {
+            const d = new Date(item.created_at);
+            return {
+              displayX: timeRange === '24h' 
+                ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+              fullDate: d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+              fullTime: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+              value: item.temperature_c
+            };
+          });
+
+        setHistoryData(trend);
+      }
     }
     setLoading(false);
   };
@@ -98,12 +125,6 @@ export default function TemperatureAnalyticsPage() {
   };
 
   const currentStatus = getStatusInfo(stats.current);
-
-  const getYDomain = (dataMax: number) => {
-    const limitCrit = settings?.temp?.crit || 120;
-    if (!dataMax || isNaN(dataMax)) return [0, limitCrit + 20];
-    return [0, Math.ceil(Math.max(dataMax + 15, limitCrit + 20))];
-  };
 
   return (
     <div className="p-10 text-[#2D365E] min-h-screen bg-[#f8fafc]">
@@ -160,16 +181,16 @@ export default function TemperatureAnalyticsPage() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                <XAxis dataKey="displayX" axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} interval={timeRange === '24h' ? 12 : 'preserveStartEnd'} />
-                {/* UX IMPROVEMENT: Menambahkan tickFormatter agar angka sumbu Y memuat lambang °C */}
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} domain={getYDomain} tickFormatter={(tick) => `${tick}°C`} />
+                <XAxis dataKey="displayX" axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} domain={[0, yMaxLimit]} tickFormatter={(tick) => `${tick}°C`} />
                 <RechartsTooltip content={<CustomTooltip />} />
                 
-                {/* Double Reference Lines dengan Validasi Ambang Batas Logis */}
-                {settings.temp.warn > 30 && (
-                  <ReferenceLine y={settings.temp.warn} stroke="#d8db26" strokeDasharray="6 6" strokeWidth={1.5} label={{ value: `WARN: ${settings.temp.warn}°C`, position: 'top', fill: '#b4980a', fontSize: 9, fontStyle: 'italic', fontWeight: 'bold' }} />
+                {settings.temp?.warn > 0 && (
+                  <ReferenceLine y={settings.temp.warn} stroke="#d8db26" strokeDasharray="6 6" strokeWidth={1.5} label={{ value: `WARN: ${settings.temp.warn}°C`, position: 'top', fill: '#b4980a', fontSize: 9, fontWeight: 'bold' }} />
                 )}
-                <ReferenceLine y={settings.temp.crit} stroke="#cb6060" strokeDasharray="8 8" strokeWidth={2} label={{ value: `CRITICAL: ${settings.temp.crit}°C`, position: 'top', fill: '#cb6060', fontSize: 10, fontWeight: 'black' }} />
+                {settings.temp?.crit > 0 && (
+                  <ReferenceLine y={settings.temp.crit} stroke="#cb6060" strokeDasharray="8 8" strokeWidth={2} label={{ value: `CRITICAL: ${settings.temp.crit}°C`, position: 'top', fill: '#cb6060', fontSize: 10, fontWeight: 'black' }} />
+                )}
                 
                 <Area type="monotone" dataKey="value" stroke="#2D365E" strokeWidth={4} fillOpacity={1} fill="url(#colorTemp)" />
               </AreaChart>
@@ -182,19 +203,19 @@ export default function TemperatureAnalyticsPage() {
           )}
         </div>
 
-        {/* BOTTOM METRICS THRESHOLD LEGENDS - UX IMPROVEMENT (SINKRON DATA) */}
+        {/* BOTTOM METRICS THRESHOLD LEGENDS */}
         <div className="flex justify-center gap-10 border-t border-gray-100 pt-8 mt-4 w-full">
            <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-[#2ac764]"></div>
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Normal &lt; {settings?.temp.warn}°C</span>
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Normal &lt; {settings?.temp?.warn || 80}°C</span>
            </div>
            <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-[#d8db26]"></div>
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{settings?.temp.warn}°C ≤ Caution ≤ {settings?.temp.crit}°C</span>
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{settings?.temp?.warn || 80}°C ≤ Caution ≤ {settings?.temp?.crit || 120}°C</span>
            </div>
            <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-[#cb6060]"></div>
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Critical &gt; {settings?.temp.crit}°C</span>
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Critical &gt; {settings?.temp?.crit || 120}°C</span>
            </div>
         </div>
       </div>

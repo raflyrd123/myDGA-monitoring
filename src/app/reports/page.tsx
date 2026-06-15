@@ -26,6 +26,9 @@ export default function ReportsPage() {
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const rowsPerPage = 10; 
 
+  // State manajemen settings kalibrasi untuk pembalik logika air fisis
+  const [settings, setSettings] = useState<any>(null);
+
   // State navigasi lompat halaman & dropdown export
   const [pageInput, setPageInput] = useState<string>('');
   const [showExportDropdown, setShowExportDropdown] = useState(false);
@@ -45,6 +48,16 @@ export default function ReportsPage() {
 
   const fetchAvailableArchives = async () => {
     setLoading(true);
+    
+    // 1. Ambil app_settings duluan buat dapet data baseline kalibrasi koper DGA
+    const { data: config } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('id', 'calibration')
+      .single();
+    if (config) setSettings(config.value);
+
+    // 2. Ambil metadata waktu logs
     const { data } = await supabase.from('sensor_logs').select('created_at');
     
     if (data && data.length > 0) {
@@ -67,7 +80,7 @@ export default function ReportsPage() {
       setAvailableData(formatted);
 
       if (formatted.length > 0 && formatted[0].months.length > 0) {
-        fetchMonthlyDetail(formatted[0].year, formatted[0].months[0]);
+        fetchMonthlyDetail(formatted[0].year, formatted[0].months[0], config?.value);
       }
     } else {
       setLogs([]);
@@ -76,30 +89,61 @@ export default function ReportsPage() {
     }
   };
 
-  const fetchMonthlyDetail = async (year: number, month: number) => {
+  const fetchMonthlyDetail = async (year: number, month: number, currentSettings?: any) => {
     setLoading(true);
     setCurrentPage(1);
     setPageInput('');
-    setSelectedIds([]); // RESET: Kosongkan seleksi centang jika berpindah folder bulan
+    setSelectedIds([]); 
     
     const firstDay = new Date(year, month, 1).toISOString();
     const lastDay = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
+    const activeSettings = currentSettings || settings;
 
-    const { data } = await supabase
-      .from('sensor_logs')
-      .select('*')
-      .gte('created_at', firstDay)
-      .lte('created_at', lastDay)
-      .order('created_at', { ascending: false });
+    // 🌟 UNLIMITED ROW FIX: Menggunakan rekursi chunking paralel otomatis untuk bypass batas 1000 PostgREST Supabase
+    let allLogs: any[] = [];
+    let fromOffset = 0;
+    let keepFetching = true;
 
-    if (data) setLogs(data);
+    while (keepFetching) {
+      const { data, error } = await supabase
+        .from('sensor_logs')
+        .select('*')
+        .gte('created_at', firstDay)
+        .lte('created_at', lastDay)
+        .order('created_at', { ascending: false })
+        .range(fromOffset, fromOffset + 999); // Tarik blok 1000 baris bertahap
+
+      if (error || !data || data.length === 0) {
+        keepFetching = false;
+      } else {
+        allLogs = [...allLogs, ...data];
+        if (data.length < 1000) {
+          keepFetching = false;
+        } else {
+          fromOffset += 1000;
+        }
+      }
+    }
+
+    // Koreksi data fisis tinggi air aktual sebelum di-push ke table view state
+    const processedLogs = allLogs.map(log => {
+      const baseline = activeSettings?.flood?.groundDistance || 100;
+      const sensorReading = log.water_level_cm || 0;
+      // 🌟 REVISI LOGIKA AIR: Tinggi Air = Baseline Tinggi Wadah - Jarak Pantulan JSN-SR04T
+      const actualWaterHeightCm = Math.max(0, baseline - sensorReading);
+      return {
+        ...log,
+        water_level_actual: actualWaterHeightCm
+      };
+    });
+
+    setLogs(processedLogs);
     setViewDetail({ year, month });
     setLoading(false);
   };
 
   // --- LOGIKA UTAMA SINKRONISASI HAPUS DATA KE CLOUD DB ---
 
-  // 1. Single Delete
   const handleDeleteLog = async (id: any) => {
     const confirmDelete = window.confirm("Apakah Anda yakin ingin menghapus baris data log ini secara permanen dari database Supabase?");
     if (!confirmDelete) return;
@@ -116,7 +160,6 @@ export default function ReportsPage() {
     }
   };
 
-  // 2. BATCH DELETE: Hapus Banyak Data yang Dicentang Sekaligus
   const handleDeleteSelected = async () => {
     if (selectedIds.length === 0) return;
     
@@ -142,7 +185,6 @@ export default function ReportsPage() {
     }
   };
 
-  // 3. TOTAL WIPE OUT: Hapus Seluruh Isi Data Log Bulan Terpilih
   const handleDeleteAllCurrentMonth = async () => {
     if (!viewDetail || logs.length === 0) return;
 
@@ -199,7 +241,7 @@ export default function ReportsPage() {
   const currentTableRows = sortedLogs.slice(indexOfFirstRow, indexOfLastRow);
 
   const handlePageJump = (e: React.FormEvent) => {
-    e.preventDefault();
+    preventDefault();
     const targetPage = parseInt(pageInput);
     if (!isNaN(targetPage) && targetPage >= 1 && targetPage <= totalPages) {
       setCurrentPage(targetPage);
@@ -217,7 +259,9 @@ export default function ReportsPage() {
       log.packet_id || '-',
       log.hydrogen_h2 ?? 0, log.carbon_monoxide_co ?? 0, log.ammonia_nh3 ?? 0, log.methane_ch4 ?? 0,
       log.propane_c3h8 ?? 0, log.butane_c4h10 ?? 0, log.ethylene_c2h4 ?? 0, log.acetylene_c2h2 ?? 0, log.ethane_c2h6 ?? 0,
-      log.temperature_c ?? 0, log.humidity_pct ?? 0, log.oil_color_pct ?? 0, log.water_level_cm ?? 0, log.safety_float || '-'
+      log.temperature_c ?? 0, log.humidity_pct ?? 0, log.oil_color_pct ?? 0, 
+      log.water_level_actual !== undefined ? log.water_level_actual.toFixed(2) : (log.water_level_cm ?? 0), 
+      log.safety_float || '-'
     ]);
     const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -236,13 +280,41 @@ export default function ReportsPage() {
 
   const exportAllTimeData = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('sensor_logs')
-      .select('*')
-      .order('created_at', { ascending: false });
+    
+    // 🌟 UNLIMITED MASTER MASTER EXPORT: Lakukan hal yang sama untuk master download seluruh histori koper riset
+    let masterLogs: any[] = [];
+    let currentOffset = 0;
+    let fetchingMaster = true;
 
-    if (data && data.length > 0) {
-      generateCSV(data, `myDGA_Master_Report_AllTime.csv`);
+    while (fetchingMaster) {
+      const { data, error } = await supabase
+        .from('sensor_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(currentOffset, currentOffset + 999);
+
+      if (error || !data || data.length === 0) {
+        fetchingMaster = false;
+      } else {
+        masterLogs = [...masterLogs, ...data];
+        if (data.length < 1000) {
+          fetchingMaster = false;
+        } else {
+          currentOffset += 1000;
+        }
+      }
+    }
+
+    const processedMaster = masterLogs.map(log => {
+      const baseline = settings?.flood?.groundDistance || 100;
+      return {
+        ...log,
+        water_level_actual: Math.max(0, baseline - (log.water_level_cm || 0))
+      };
+    });
+
+    if (processedMaster.length > 0) {
+      generateCSV(processedMaster, `myDGA_Master_Report_AllTime.csv`);
     } else {
       alert("Tidak ada data di database untuk diekspor.");
     }
@@ -268,14 +340,15 @@ export default function ReportsPage() {
             <Download size={16} /> Export Data <ChevronDown size={14} className={`transition-transform duration-200 ${showExportDropdown ? 'rotate-180' : ''}`} />
           </button>
           
+          {/* ... Dropdown content tetap dipertahankan ... */}
           {showExportDropdown && (
-            <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-50">
               <button 
                 onClick={exportCurrentMonth}
                 disabled={logs.length === 0}
                 className="w-full text-left px-4 py-3 text-xs font-black text-[#2D365E] hover:bg-gray-50 flex items-center gap-2 uppercase disabled:opacity-30"
               >
-                <FileSpreadsheet size={14} className="text-cyan-500" /> Ekspor Bulan Ini Only
+                <FileSpreadsheet size={14} className="text-cyan-500" /> Ekspor Bulan Ini Only ({logs.length} Baris)
               </button>
               <button 
                 onClick={exportAllTimeData}
@@ -320,14 +393,13 @@ export default function ReportsPage() {
 
       {/* CORE TABLE MANAGEMENT PANEL */}
       {viewDetail ? (
-        <div className="bg-white rounded-[40px] shadow-2xl border border-gray-100 overflow-hidden flex flex-col p-6 animate-in fade-in duration-300">
+        <div className="bg-white rounded-[40px] shadow-2xl border border-gray-100 overflow-hidden flex flex-col p-6">
           
           <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-50">
             <h2 className="text-sm font-black uppercase tracking-wider text-[#2D365E] flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-cyan-500" /> Menampilkan Data: {getMonthName(viewDetail.month)} {viewDetail.year} ({logs.length} Baris)
+              <Calendar className="w-4 h-4 text-cyan-500" /> Menampilkan Data: {getMonthName(viewDetail.month)} {viewDetail.year} ({logs.length} Baris Total)
             </h2>
             
-            {/* ACTION BAR BARU: Kontrol Mass Delete Terintegrasi */}
             <div className="flex items-center gap-3">
               {selectedIds.length > 0 && (
                 <button 
@@ -355,12 +427,11 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* TABEL RESPONSIVE WITH SELECTION CHECKBOX COLUMN */}
+          {/* TABEL RESPONSIVE COLUMNS */}
           <div className="overflow-x-auto w-full mb-6 rounded-2xl border border-gray-100">
             <table className="w-full text-left border-collapse min-w-[1800px]">
               <thead>
                 <tr className="bg-gray-50/70 border-b border-gray-100 text-[10px] font-black uppercase tracking-widest text-gray-400">
-                  {/* CHECKBOX COLHEADER: Master Check/Uncheck per Page */}
                   <th className="p-4 pl-6 text-center whitespace-nowrap w-12">
                     <input 
                       type="checkbox"
@@ -405,8 +476,6 @@ export default function ReportsPage() {
                 ) : currentTableRows.length > 0 ? (
                   currentTableRows.map((log, i) => (
                     <tr key={log.id || i} className={`transition-colors ${selectedIds.includes(log.id) ? 'bg-blue-50/40 hover:bg-blue-50/60' : 'hover:bg-gray-50/40'}`}>
-                      
-                      {/* CHECKBOX SELECTION ROW */}
                       <td className="p-4 pl-6 text-center">
                         <input 
                           type="checkbox"
@@ -421,7 +490,6 @@ export default function ReportsPage() {
                           className="w-4 h-4 rounded border-gray-300 text-[#2D365E] focus:ring-[#2D365E] cursor-pointer"
                         />
                       </td>
-
                       <td className="p-4 text-gray-400 font-mono whitespace-nowrap">
                         {new Date(log.created_at).toLocaleDateString('id-ID')} - {new Date(log.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}
                       </td>
@@ -438,15 +506,15 @@ export default function ReportsPage() {
                       <td className="p-4 text-center text-[#2D365E] font-mono">{log.temperature_c ?? 0}°C</td>
                       <td className="p-4 text-center text-[#2D365E] font-mono">{log.humidity_pct ?? 0}%</td>
                       <td className="p-4 text-center text-[#2D365E] font-mono">{log.oil_color_pct ?? 0}%</td>
-                      <td className="p-4 text-center text-[#2D365E] font-mono">{log.water_level_cm ?? 0} cm</td>
+                      {/* 🌟 FIX INDIKATOR: Menampilkan tinggi air fisis riil koma lengkap (2 desimal) */}
+                      <td className="p-4 text-center text-[#2D365E] font-mono">
+                        {log.water_level_actual !== undefined ? log.water_level_actual.toFixed(2) : '0.00'} cm
+                      </td>
                       <td className="p-4 text-center text-gray-400 font-mono uppercase">{log.safety_float || 'NORMAL'}</td>
-                      
-                      {/* 🌟 FIX ACTION CELL: Typo karakter asing sudah dibersihkan */}
                       <td className="p-4 text-center pr-6 whitespace-nowrap">
                         <button 
                           onClick={() => handleDeleteLog(log.id)}
                           className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-700 transition-colors shadow-sm"
-                          title="Hapus baris data dari database"
                         >
                           <Trash2 size={14} />
                         </button>

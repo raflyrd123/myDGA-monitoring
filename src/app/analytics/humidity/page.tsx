@@ -20,7 +20,7 @@ const CustomTooltip = ({ active, payload }: any) => {
         </div>
         <div className="flex justify-between items-end border-t pt-2 mt-2">
           <span className="text-xs font-bold text-gray-500 uppercase">Humidity</span>
-          <span className="text-xl font-black text-[#2D365E]">{value.toFixed(1)}%</span>
+          <span className="text-xl font-black text-[#2D365E]">{value.toFixed(2)}%</span>
         </div>
       </div>
     );
@@ -54,38 +54,63 @@ export default function HumidityAnalyticsPage() {
     let days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : 30;
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
     
-    const { data } = await supabase
-      .from('sensor_logs')
-      .select('humidity_pct, created_at')
-      .gte('created_at', cutoff)
-      .order('created_at', { ascending: true });
+    // 🌟 FIX UNLIMITED ROW FETCH: Mekanisme loop chunking paralel bypass batasan PostgREST 1000 baris
+    let allRawData: any[] = [];
+    let fromOffset = 0;
+    let keepFetching = true;
 
-    if (data && data.length > 0) {
-      const hums = data.map(d => d.humidity_pct || 0).filter(h => h > 0);
-      
-      if (hums.length > 0) {
+    while (keepFetching) {
+      const { data: chunk, error } = await supabase
+        .from('sensor_logs')
+        .select('humidity_pct, created_at')
+        .gte('created_at', cutoff)
+        .order('created_at', { ascending: true })
+        .range(fromOffset, fromOffset + 999);
+
+      if (error || !chunk || chunk.length === 0) {
+        keepFetching = false;
+      } else {
+        allRawData = [...allRawData, ...chunk];
+        if (chunk.length < 1000) {
+          keepFetching = false;
+        } else {
+          fromOffset += 1000;
+        }
+      }
+    }
+
+    if (allRawData.length > 0) {
+      // 🌟 DATA SANITIZATION FILTER: Membuang semua data error kendor di luar batas spektrum fisis 0% - 100%
+      const validRawData = allRawData.filter(d => d.humidity_pct !== null && d.humidity_pct >= 0 && d.humidity_pct <= 100);
+
+      if (validRawData.length > 0) {
+        const hums = validRawData.map(d => d.humidity_pct);
+        
         const avg = hums.reduce((a, b) => a + b, 0) / hums.length;
         const peak = Math.max(...hums);
-        const current = hums[hums.length - 1]; // Data teraktual detik ini
+        const current = hums[hums.length - 1]; 
         setStats({ avg, peak, current });
-      }
 
-      const trend = data.filter((_, index) => {
-        if (timeRange === '24h') return index % 5 === 0;
-        if (timeRange === '7d') return index % 60 === 0;
-        return index % 120 === 0;
-      }).map(item => {
-        const d = new Date(item.created_at);
-        return {
-          displayX: timeRange === '24h' 
-            ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
-          fullDate: d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
-          fullTime: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-          value: item.humidity_pct || 0
-        };
-      });
-      setHistoryData(trend);
+        // 🌟 DYNAMIC DOWNSAMPLING STEP: Membagi data dinamis agar kurva grafik ter-plot padat meliuk organik (~55 titik)
+        const targetPoints = 55;
+        const dynamicStep = Math.ceil(validRawData.length / targetPoints) || 1;
+
+        const trend = validRawData
+          .filter((_, index) => index % dynamicStep === 0)
+          .map(item => {
+            const d = new Date(item.created_at);
+            return {
+              displayX: timeRange === '24h' 
+                ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+              fullDate: d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+              fullTime: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+              value: item.humidity_pct
+            };
+          });
+
+        setHistoryData(trend);
+      }
     } 
     setLoading(false);
   };
@@ -97,7 +122,6 @@ export default function HumidityAnalyticsPage() {
     return { label: 'WET', color: '#2ac7c7' };
   };
 
-  // UX UPDATE: Evaluasi status didasarkan pada data live terkini (current)
   const currentStatus = getStatusInfo(stats.current);
 
   return (
@@ -130,7 +154,6 @@ export default function HumidityAnalyticsPage() {
         </div>
         <div className="bg-[#2D365E] rounded-[40px] p-8 shadow-xl flex items-center justify-between overflow-hidden relative border border-white/5">
           <div className="z-10">
-            {/* UX UPDATE: Mengubah "Current Vibe" menjadi "Current Status" standar monitoring */}
             <p className="text-xs font-black text-white/40 uppercase tracking-widest mb-2">Current Status</p>
             <h3 className="text-3xl font-black text-white uppercase tracking-tight">{currentStatus.label}</h3>
           </div>
@@ -156,14 +179,16 @@ export default function HumidityAnalyticsPage() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                <XAxis dataKey="displayX" axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} interval={timeRange === '24h' ? 12 : 'preserveStartEnd'} />
-                {/* UX IMPROVEMENT: Menambahkan tickFormatter % pada sumbu vertikal Y Axis */}
+                <XAxis dataKey="displayX" axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} />
                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} domain={[0, 100]} tickFormatter={(tick) => `${tick}%`} />
                 <RechartsTooltip content={<CustomTooltip />} />
                 
-                {/* STANDARISASI: Menambahkan Reference Lines batas ambang Dry & Wet langsung di grafik */}
-                <ReferenceLine y={settings.humidity.dry} stroke="#cb6060" strokeDasharray="6 6" strokeWidth={1.5} label={{ value: `DRY: ${settings.humidity.dry}%`, position: 'top', fill: '#cb6060', fontSize: 9, fontStyle: 'italic', fontWeight: 'bold' }} />
-                <ReferenceLine y={settings.humidity.wet} stroke="#2ac7c7" strokeDasharray="6 6" strokeWidth={1.5} label={{ value: `WET: ${settings.humidity.wet}%`, position: 'top', fill: '#2ac7c7', fontSize: 9, fontStyle: 'italic', fontWeight: 'bold' }} />
+                {settings.humidity?.dry > 0 && (
+                  <ReferenceLine y={settings.humidity.dry} stroke="#cb6060" strokeDasharray="6 6" strokeWidth={1.5} label={{ value: `DRY: ${settings.humidity.dry}%`, position: 'top', fill: '#cb6060', fontSize: 9, fontStyle: 'italic', fontWeight: 'bold' }} />
+                )}
+                {settings.humidity?.wet > 0 && (
+                  <ReferenceLine y={settings.humidity.wet} stroke="#2ac7c7" strokeDasharray="6 6" strokeWidth={1.5} label={{ value: `WET: ${settings.humidity.wet}%`, position: 'top', fill: '#2ac7c7', fontSize: 9, fontStyle: 'italic', fontWeight: 'bold' }} />
+                )}
                 
                 <Area type="monotone" dataKey="value" stroke="#2D365E" strokeWidth={4} fillOpacity={1} fill="url(#colorHum)" />
               </AreaChart>
@@ -176,20 +201,19 @@ export default function HumidityAnalyticsPage() {
           )}
         </div>
 
-        {/* BOTTOM METRICS THRESHOLD LEGENDS - UX UPDATE SINKRONISASI MATRIKS */}
+        {/* BOTTOM METRICS THRESHOLD LEGENDS */}
         <div className="flex justify-center gap-10 border-t border-gray-100 pt-8 mt-4 w-full">
            <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-[#cb6060]"></div>
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Dry &lt; {settings?.humidity.dry}%</span>
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Dry &lt; {settings?.humidity?.dry || 60}%</span>
            </div>
            <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-[#2ac764]"></div>
-              {/* FIX TEXT: Pemetaan rentang tengah yang presisi */}
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{settings?.humidity.dry}% &lt; Normal ≤ {settings?.humidity.wet}%</span>
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{settings?.humidity?.dry || 60}% &lt; Normal ≤ {settings?.humidity?.wet || 80}%</span>
            </div>
            <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-[#2ac7c7]"></div>
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Wet &gt; {settings?.humidity.wet}%</span>
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Wet &gt; {settings?.humidity?.wet || 80}%</span>
            </div>
         </div>
       </div>

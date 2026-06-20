@@ -25,7 +25,6 @@ const CustomNetworkTooltip = ({ active, payload, mode }: any) => {
                 <span className="text-xs font-bold text-gray-500 uppercase">Latency:</span>
                 <span className="text-sm font-black text-[#2D365E]">{data.latency.toFixed(0)} ms</span>
               </div>
-              {/* 🌟 TOOLTIP THROUGHPUT */}
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold text-emerald-600 uppercase">Throughput:</span>
                 <span className="text-sm font-black text-emerald-600">{data.throughput.toFixed(2)} bps</span>
@@ -57,7 +56,6 @@ export default function NetworkAnalyticsPage() {
   const [chartData, setChartData] = useState<any[]>([]); 
   const [loading, setLoading] = useState(true);
   
-  // 🌟 UPDATE STATE: Menampung rata-rata Throughput hasil kalkulasi
   const [stats, setStats] = useState({ avgLatency: 0, pdr: 100, currentRssi: 0, avgThroughput: 0 });
 
   const [selectedMonth, setSelectedMonth] = useState<string>(''); 
@@ -104,7 +102,7 @@ export default function NetworkAnalyticsPage() {
       let lossCount = 0;
       let expectedNextId = null;
       let lastTimestamp = null; 
-      let totalThroughput = 0; // Akumulator nilai throughput
+      let totalThroughput = 0; 
       const allMappedLogs: any[] = [];
       
       allRawData.forEach((item, idx) => {
@@ -112,7 +110,7 @@ export default function NetworkAnalyticsPage() {
         const waktuDiterimaWeb = d.getTime(); 
         
         let isNewSession = false;
-        let timeGapSeconds = 10; // Interval default transmisi fisis lo (asumsi 10 detik sekali)
+        let timeGapSeconds = 10; // Interval pengujian dasar hardware lo (10 detik)
         
         if (lastTimestamp !== null) {
           const timeGapMinutes = (waktuDiterimaWeb - lastTimestamp) / (1000 * 60);
@@ -120,28 +118,23 @@ export default function NetworkAnalyticsPage() {
           
           if (timeGapMinutes > 30) { 
             isNewSession = true;
-            timeGapSeconds = 10; // Reset ke default interval agar kalkulasi throughput sesi baru stabil
+            timeGapSeconds = 10; // Reset penormalan durasi agar throughput antarsesi tidak drop ke nol
           }
         }
         lastTimestamp = waktuDiterimaWeb;
 
-        let waktuKirimAlat = item.timestamp_kirim ? Number(item.timestamp_kirim) : waktuDiterimaWeb - 120; 
-        
-        if (waktuKirimAlat < 5000000000) {
+        let waktuKirimAlat = item.timestamp_kirim ? Number(item.timestamp_kirim) : 0; 
+        if (waktuKirimAlat < 5000000000 && waktuKirimAlat > 0) {
           waktuKirimAlat *= 1000;
         }
 
-        let latency = waktuDiterimaWeb - waktuKirimAlat;
-        
-        if (latency < 0 || latency > 5000 || isNewSession) {
-          latency = Math.floor(Math.random() * 80) + 110; 
-        }
+        // 🌟 PERHITUNGAN LATENSI JUJUR (Murni selisih data kirim & terima database tanpa manipulasi)
+        let latency = waktuKirimAlat > 0 ? (waktuDiterimaWeb - waktuKirimAlat) : 0;
 
-        // 🌟 FORMULA MATEMATIKA THROUGHPUT OLEH NEXT.JS
-        // Ukuran rata-rata payload data string JSON Raspi lo adalah ~220 Bytes
-        const payloadSizeBytes = 220; 
+        // 🌟 KALKULASI THROUGHPUT REAL-TIME BERDASARKAN JEDA LOG DATA
+        const payloadSizeBytes = 220; // Estimasi panjang karakter JSON string dari Raspi lo
         if (timeGapSeconds <= 0) timeGapSeconds = 1; 
-        const throughput = (payloadSizeBytes * 8) / timeGapSeconds; // Hasil dalam satuan bps (bits per second)
+        const throughput = (payloadSizeBytes * 8) / timeGapSeconds; 
         totalThroughput += throughput;
 
         let rssi = item.lora_rssi || 0;
@@ -179,13 +172,6 @@ export default function NetworkAnalyticsPage() {
         totalLatency += latency;
         validLatencyCount++;
 
-        let distance = 0;
-        if (rssi < 0) {
-          const P0 = -45; 
-          const n = 2.2;  
-          distance = Math.pow(10, (P0 - rssi) / (10 * n));
-        }
-
         allMappedLogs.push({
           id: packetId,
           isLost: false,
@@ -196,18 +182,17 @@ export default function NetworkAnalyticsPage() {
           monthGroup,
           latency,
           rssi,
-          distance,
+          distance: Math.pow(10, (-45 - rssi) / (10 * 2.2)),
           snr,
-          throughput // Dimasukkan ke dalam array log object
+          throughput 
         });
       });
 
-      const avgLatency = validLatencyCount > 0 ? (totalLatency / validLatencyCount) : 145;
-      const avgThroughput = validLatencyCount > 0 ? (totalThroughput / validLatencyCount) : 176.0;
+      const avgLatency = validLatencyCount > 0 ? (totalLatency / validLatencyCount) : 0;
+      const avgThroughput = validLatencyCount > 0 ? (totalThroughput / validLatencyCount) : 0;
       const totalSentPackets = allRawData.length + lossCount;
       
-      let pdr = totalSentPackets > 0 ? (allRawData.length / totalSentPackets) * 100 : 100;
-      if (pdr < 80) pdr = 96.4; 
+      const pdr = totalSentPackets > 0 ? (allRawData.length / totalSentPackets) * 100 : 100;
 
       const lastElement = allMappedLogs[allMappedLogs.length - 1];
 
@@ -215,7 +200,7 @@ export default function NetworkAnalyticsPage() {
         avgLatency,
         pdr,
         currentRssi: lastElement?.isLost ? -92 : (lastElement?.rssi || -92),
-        avgThroughput // Masuk ke dashboard global stat card
+        avgThroughput
       });
 
       const targetPoints = 55;
@@ -262,7 +247,7 @@ export default function NetworkAnalyticsPage() {
   }, [timeRange]);
 
   const getLatencyStatus = (ms: number) => {
-    if (ms === 0) return { text: 'NO PAYLOAD', color: 'text-gray-400', bg: 'bg-gray-500/10 border-gray-500/20' };
+    if (ms <= 0) return { text: 'CLOCK MISMATCH', color: 'text-gray-400', bg: 'bg-gray-500/10 border-gray-500/20' };
     if (ms <= 180) return { text: 'EXCELLENT', color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' };
     if (ms <= 350) return { text: 'GOOD', color: 'text-yellow-500', bg: 'bg-yellow-500/10 border-yellow-500/20' };
     return { text: 'DELAYED', color: 'text-rose-500', bg: 'bg-rose-500/10 border-rose-500/20' };
@@ -377,7 +362,6 @@ export default function NetworkAnalyticsPage() {
           </span>
         </div>
 
-        {/* 🌟 REVISI TOTAL KARTU KETIGA: MENAMPILKAN RATA-RATA THROUGHPUT SISTEM LORA */}
         <div className="bg-[#2D365E] rounded-[40px] p-8 shadow-xl flex items-center justify-between overflow-hidden relative border border-white/5">
           <div className="z-10">
             <p className="text-xs font-black text-white/40 uppercase tracking-widest mb-2 flex items-center gap-2">
@@ -430,12 +414,10 @@ export default function NetworkAnalyticsPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                   <XAxis dataKey="displayX" axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} />
-                  <YAxis width={65} axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} domain={[0, 300]} label={{ value: 'Performance Metric Level', angle: -90, position: 'insideLeft', fill: '#2D365E', offset: 5, fontWeight: 'bold', fontSize: 11 }} />
+                  <YAxis width={65} axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} label={{ value: 'Performance Metric Level', angle: -90, position: 'insideLeft', fill: '#2D365E', offset: 5, fontWeight: 'bold', fontSize: 11 }} />
                   <RechartsTooltip content={<CustomNetworkTooltip mode="qos" />} />
                   <Legend verticalAlign="top" height={36} iconType="circle" />
-                  <ReferenceLine y={250} stroke="#cb6060" strokeDasharray="4 4" strokeWidth={1.5} label={{ value: 'Batas Kritis Delay LoRa', fill: '#cb6060', fontSize: 10, fontWeight: 'bold', position: 'top' }} />
                   <Area type="monotone" dataKey="latency" name="Latency (ms)" stroke="#2D365E" strokeWidth={4} fillOpacity={1} fill="url(#colorLatency)" />
-                  {/* 🌟 OVERLAY GRAFIK GARIS UTK THROUGHPUT TREND */}
                   <Line type="monotone" dataKey="throughput" name="Throughput (bps)" stroke="#10b981" strokeWidth={3} dot={false} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -613,14 +595,13 @@ export default function NetworkAnalyticsPage() {
                         </td>
                         <td className="py-4">
                           <span className={`px-2 py-0.5 rounded text-[9px] font-black border ${latStatus.bg} ${latStatus.color}`}>
-                            {log.latency === 0 ? '0 ms' : `${log.latency.toFixed(0)} ms`}
+                            {log.latency <= 0 ? '--' : `${log.latency.toFixed(0)} ms`}
                           </span>
                         </td>
                         <td className="py-4 text-cyan-400 font-mono">
                           {log.rssi === 0 ? '--' : `${log.rssi} dBm`} 
                           <span className="text-white/30 text-[9px] ml-1">/ {log.snr.toFixed(1)} dB SNR</span>
                         </td>
-                        {/* 🌟 KOLOM BARU DI ARSIP STREAM TABLE UNTUK KUALITAS THROUGHPUT */}
                         <td className="py-4 pr-4 text-emerald-400 font-mono">
                           {log.throughput.toFixed(2)} bps
                         </td>

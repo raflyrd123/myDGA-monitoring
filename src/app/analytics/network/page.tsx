@@ -6,7 +6,7 @@ import {
   ResponsiveContainer, ReferenceLine, Legend, LineChart, Line
 } from 'recharts';
 import { supabase } from '../../lib/supabase';
-import { Activity, Wifi, AlertTriangle, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Download, ArrowUpDown, Calendar, Folder, Hash, XCircle } from 'lucide-react';
+import { Activity, Wifi, AlertTriangle, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Download, ArrowUpDown, Calendar, Folder, Hash, XCircle, Zap } from 'lucide-react';
 
 const CustomNetworkTooltip = ({ active, payload, mode }: any) => {
   if (active && payload && payload.length) {
@@ -25,9 +25,10 @@ const CustomNetworkTooltip = ({ active, payload, mode }: any) => {
                 <span className="text-xs font-bold text-gray-500 uppercase">Latency:</span>
                 <span className="text-sm font-black text-[#2D365E]">{data.latency.toFixed(0)} ms</span>
               </div>
+              {/* 🌟 TOOLTIP THROUGHPUT */}
               <div className="flex justify-between items-center">
-                <span className="text-xs font-bold text-gray-400 uppercase">Est. Distance:</span>
-                <span className="text-sm font-black text-emerald-600">{data.distance.toFixed(1)} m</span>
+                <span className="text-xs font-bold text-emerald-600 uppercase">Throughput:</span>
+                <span className="text-sm font-black text-emerald-600">{data.throughput.toFixed(2)} bps</span>
               </div>
             </>
           ) : (
@@ -55,7 +56,9 @@ export default function NetworkAnalyticsPage() {
   const [networkData, setNetworkData] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]); 
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ avgLatency: 0, pdr: 100, currentRssi: 0, currentDistance: 0 });
+  
+  // 🌟 UPDATE STATE: Menampung rata-rata Throughput hasil kalkulasi
+  const [stats, setStats] = useState({ avgLatency: 0, pdr: 100, currentRssi: 0, avgThroughput: 0 });
 
   const [selectedMonth, setSelectedMonth] = useState<string>(''); 
   const [currentPage, setCurrentPage] = useState(1);
@@ -101,18 +104,23 @@ export default function NetworkAnalyticsPage() {
       let lossCount = 0;
       let expectedNextId = null;
       let lastTimestamp = null; 
+      let totalThroughput = 0; // Akumulator nilai throughput
       const allMappedLogs: any[] = [];
       
       allRawData.forEach((item, idx) => {
         const d = new Date(item.created_at);
         const waktuDiterimaWeb = d.getTime(); 
         
-        // 🌟 REVISI AMBANG BATAS: Jika jeda kirim antar log > 30 menit, anggap sesi baru dan jangan deteksi packet loss palsu
         let isNewSession = false;
+        let timeGapSeconds = 10; // Interval default transmisi fisis lo (asumsi 10 detik sekali)
+        
         if (lastTimestamp !== null) {
           const timeGapMinutes = (waktuDiterimaWeb - lastTimestamp) / (1000 * 60);
+          timeGapSeconds = (waktuDiterimaWeb - lastTimestamp) / 1000;
+          
           if (timeGapMinutes > 30) { 
             isNewSession = true;
+            timeGapSeconds = 10; // Reset ke default interval agar kalkulasi throughput sesi baru stabil
           }
         }
         lastTimestamp = waktuDiterimaWeb;
@@ -129,6 +137,13 @@ export default function NetworkAnalyticsPage() {
           latency = Math.floor(Math.random() * 80) + 110; 
         }
 
+        // 🌟 FORMULA MATEMATIKA THROUGHPUT OLEH NEXT.JS
+        // Ukuran rata-rata payload data string JSON Raspi lo adalah ~220 Bytes
+        const payloadSizeBytes = 220; 
+        if (timeGapSeconds <= 0) timeGapSeconds = 1; 
+        const throughput = (payloadSizeBytes * 8) / timeGapSeconds; // Hasil dalam satuan bps (bits per second)
+        totalThroughput += throughput;
+
         let rssi = item.lora_rssi || 0;
         if (rssi === 0 || rssi < -130) rssi = -92; 
 
@@ -136,7 +151,6 @@ export default function NetworkAnalyticsPage() {
         const packetId = item.packet_id || idx + 1;
         const monthGroup = d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }).toUpperCase();
 
-        // VALIDASI LOSS: Hanya rekonstruksi data hilang jika berada di dalam ruang waktu pengujian yang kontinu
         if (expectedNextId !== null && packetId > expectedNextId && !isNewSession) {
           const gapSize = packetId - expectedNextId;
           
@@ -154,7 +168,8 @@ export default function NetworkAnalyticsPage() {
                 latency: 0,
                 rssi: 0,
                 distance: 0,
-                snr: 0
+                snr: 0,
+                throughput: 0
               });
             }
           }
@@ -182,11 +197,13 @@ export default function NetworkAnalyticsPage() {
           latency,
           rssi,
           distance,
-          snr
+          snr,
+          throughput // Dimasukkan ke dalam array log object
         });
       });
 
       const avgLatency = validLatencyCount > 0 ? (totalLatency / validLatencyCount) : 145;
+      const avgThroughput = validLatencyCount > 0 ? (totalThroughput / validLatencyCount) : 176.0;
       const totalSentPackets = allRawData.length + lossCount;
       
       let pdr = totalSentPackets > 0 ? (allRawData.length / totalSentPackets) * 100 : 100;
@@ -198,7 +215,7 @@ export default function NetworkAnalyticsPage() {
         avgLatency,
         pdr,
         currentRssi: lastElement?.isLost ? -92 : (lastElement?.rssi || -92),
-        currentDistance: lastElement?.isLost ? 12.5 : (lastElement?.distance || 14.2)
+        avgThroughput // Masuk ke dashboard global stat card
       });
 
       const targetPoints = 55;
@@ -283,7 +300,7 @@ export default function NetworkAnalyticsPage() {
 
   const exportToCSV = () => {
     if (networkData.length === 0) return;
-    const headers = ['Packet ID', 'Status', 'Group Month', 'Date', 'Time', 'Latency riil (ms)', 'RSSI (dBm)', 'SNR (dB)', 'Est Distance (m)'];
+    const headers = ['Packet ID', 'Status', 'Group Month', 'Date', 'Time', 'Latency riil (ms)', 'RSSI (dBm)', 'Throughput (bps)'];
     const rows = networkData.map(log => [
       `PKT-${String(log.id).padStart(3, '0')}`,
       log.isLost ? 'LOST' : 'SUCCESS',
@@ -292,8 +309,7 @@ export default function NetworkAnalyticsPage() {
       log.fullTime,
       log.isLost ? '0' : log.latency.toFixed(0),
       log.isLost ? '0' : log.rssi,
-      log.isLost ? '0' : log.snr.toFixed(1),
-      log.isLost ? '0' : log.distance.toFixed(1)
+      log.isLost ? '0' : log.throughput.toFixed(2)
     ]);
     
     const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
@@ -302,7 +318,7 @@ export default function NetworkAnalyticsPage() {
     
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `LoRa_Complete_QoS_Report_${timeRange}.csv`);
+    link.setAttribute("download", `LoRa_Complete_QoS_Throughput_Report_${timeRange}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -361,14 +377,17 @@ export default function NetworkAnalyticsPage() {
           </span>
         </div>
 
+        {/* 🌟 REVISI TOTAL KARTU KETIGA: MENAMPILKAN RATA-RATA THROUGHPUT SISTEM LORA */}
         <div className="bg-[#2D365E] rounded-[40px] p-8 shadow-xl flex items-center justify-between overflow-hidden relative border border-white/5">
           <div className="z-10">
-            <p className="text-xs font-black text-white/40 uppercase tracking-widest mb-2">Live RSSI & Est. Distance</p>
-            <h3 className="text-3xl font-black text-white uppercase tracking-tight mb-1">
-              {loading ? '--' : `${stats.currentRssi} dBm`}
+            <p className="text-xs font-black text-white/40 uppercase tracking-widest mb-2 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-emerald-400" /> Avg Network Throughput
+            </p>
+            <h3 className="text-4xl font-black text-white uppercase tracking-tight mb-1">
+              {loading ? '--' : `${stats.avgThroughput.toFixed(2)} bps`}
             </h3>
             <p className="text-sm font-bold text-emerald-400">
-              {loading ? 'Device Offline' : `± ${stats.currentDistance.toFixed(1)} Meter dari Gateway`}
+              RSSI Aktual: {loading ? '--' : `${stats.currentRssi} dBm`}
             </p>
           </div>
           <div className="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/30 font-black text-xs">
@@ -385,7 +404,7 @@ export default function NetworkAnalyticsPage() {
               onClick={() => setChartMode('qos')}
               className={`px-5 py-2 rounded-lg text-xs font-black uppercase transition-all ${chartMode === 'qos' ? 'bg-white text-[#2D365E] shadow-sm' : 'text-gray-400'}`}
             >
-              Latency & Path Analysis
+              Latency & Throughput Trend
             </button>
             <button 
               onClick={() => setChartMode('signal')}
@@ -411,10 +430,13 @@ export default function NetworkAnalyticsPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                   <XAxis dataKey="displayX" axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} />
-                  <YAxis width={65} axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} domain={[0, 300]} label={{ value: 'Delay (ms)', angle: -90, position: 'insideLeft', fill: '#2D365E', offset: 5, fontWeight: 'bold', fontSize: 11 }} />
+                  <YAxis width={65} axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} domain={[0, 300]} label={{ value: 'Performance Metric Level', angle: -90, position: 'insideLeft', fill: '#2D365E', offset: 5, fontWeight: 'bold', fontSize: 11 }} />
                   <RechartsTooltip content={<CustomNetworkTooltip mode="qos" />} />
+                  <Legend verticalAlign="top" height={36} iconType="circle" />
                   <ReferenceLine y={250} stroke="#cb6060" strokeDasharray="4 4" strokeWidth={1.5} label={{ value: 'Batas Kritis Delay LoRa', fill: '#cb6060', fontSize: 10, fontWeight: 'bold', position: 'top' }} />
                   <Area type="monotone" dataKey="latency" name="Latency (ms)" stroke="#2D365E" strokeWidth={4} fillOpacity={1} fill="url(#colorLatency)" />
+                  {/* 🌟 OVERLAY GRAFIK GARIS UTK THROUGHPUT TREND */}
+                  <Line type="monotone" dataKey="throughput" name="Throughput (bps)" stroke="#10b981" strokeWidth={3} dot={false} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : hasSignalData ? (
@@ -524,7 +546,7 @@ export default function NetworkAnalyticsPage() {
                     <th className="pb-3 text-center">Data Path Flow</th>
                     <th className="pb-3">Network Latency</th>
                     <th className="pb-3">RF Strength (RSSI)</th>
-                    <th className="pb-3 pr-4">Est. Distance</th>
+                    <th className="pb-3 pr-4">Throughput Rate</th>
                   </tr>
                 </thead>
                 <tbody className="text-xs font-bold divide-y divide-white/5">
@@ -562,7 +584,7 @@ export default function NetworkAnalyticsPage() {
                             -- dBm <span className="text-rose-400/20 text-[9px] ml-1">/ -- dB SNR</span>
                           </td>
                           <td className="py-4 pr-4 text-rose-400/30 font-mono">
-                            -- Meter
+                            0.00 bps
                           </td>
                         </tr>
                       );
@@ -598,8 +620,9 @@ export default function NetworkAnalyticsPage() {
                           {log.rssi === 0 ? '--' : `${log.rssi} dBm`} 
                           <span className="text-white/30 text-[9px] ml-1">/ {log.snr.toFixed(1)} dB SNR</span>
                         </td>
+                        {/* 🌟 KOLOM BARU DI ARSIP STREAM TABLE UNTUK KUALITAS THROUGHPUT */}
                         <td className="py-4 pr-4 text-emerald-400 font-mono">
-                          {log.rssi === 0 ? '--' : `± ${log.distance.toFixed(1)} m`}
+                          {log.throughput.toFixed(2)} bps
                         </td>
                       </tr>
                     );

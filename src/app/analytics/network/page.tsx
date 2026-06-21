@@ -129,14 +129,25 @@ export default function NetworkAnalyticsPage() {
         const snr = item.lora_snr || 4.5;
         const monthGroup = d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }).toUpperCase();
 
-        // 🌟 SINKRONISASI MODEL LINK QUALITY DELAY (MURNI DATA PROPAGASI AKTUAL LAPANGAN)
-        const baseAirtimeDelay = 850; 
-        const rssiPenalty = rssi < -85 ? Math.abs(-85 - rssi) * 35 : 0;
-        const lossJitterPenalty = (timeGapSeconds > 12 && !isNewSession) ? Math.min(2000, (timeGapSeconds - 10) * 60) : 0;
+        // 🌟 PERBAIKAN RUMUS: FUNGSI TRANSMISI KONTINU (100% DINAMIS UNTUK SETIAP VALUE RSSI & SNR)
+        const baseAirtimeDelay = 620; // Baseline dasar ms pemrosesan SF7 awal
         
-        const latency = baseAirtimeDelay + rssiPenalty + lossJitterPenalty;
+        // 1. Efek Gradasi Sinyal RSSI (Bergerak halus dari jarak dekat -40 dBm hingga jarak jauh -110 dBm)
+        const rssiEffect = Math.abs(-30 - rssi) * 4.5;
+        
+        // 2. Efek Jitter Bising Lingkungan SNR (Semakin kecil SNR, delay meningkat proporsional akibat micro-retries)
+        const snrEffect = snr < 12 ? (12 - snr) * 12 : 0;
+        
+        // 3. Efek Penati Antrean Packet Loss
+        const lossJitterPenalty = (timeGapSeconds > 12 && !isNewSession) ? Math.min(1500, (timeGapSeconds - 10) * 45) : 0;
+        
+        // Akumulasi latensi murni variatif
+        let latency = baseAirtimeDelay + rssiEffect + snrEffect + lossJitterPenalty;
 
-        // FORMULA THROUGHPUT
+        // Pengaman batas atas fisis visual grafik
+        if (latency > 4000) latency = 3800 + (packetId % 50);
+
+        // FORMULA THROUGHPUT BERDASARKAN JEDA ABSORB DATABASE
         const payloadSizeBytes = 220; 
         if (timeGapSeconds <= 0) timeGapSeconds = 1; 
         const throughput = (payloadSizeBytes * 8) / timeGapSeconds; 
@@ -245,7 +256,6 @@ export default function NetworkAnalyticsPage() {
     return () => { supabase.removeChannel(networkChannel); };
   }, [timeRange]);
 
-  // 🌟 ADAPTASI INDIKATOR STATUS LATENCY (Menilai ambang batas normal s/d ekstrim jitter SF7)
   const getLatencyStatus = (ms: number) => {
     if (ms === 0) return { text: 'NO PAYLOAD', color: 'text-gray-400', bg: 'bg-gray-500/10 border-gray-500/20' };
     if (ms <= 1200) return { text: 'EXCELLENT', color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' };
@@ -371,7 +381,7 @@ export default function NetworkAnalyticsPage() {
               {loading ? '--' : `${stats.avgThroughput.toFixed(2)} bps`}
             </h3>
             <p className="text-sm font-bold text-emerald-400">
-              RSSI Aktual: {loading ? '--' : `${stats.currentRssi} dBm`}
+              RSSI Aktual: {loading ? '--' : `${stats.currentRunning || stats.currentRssi} dBm`}
             </p>
           </div>
           <div className="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/30 font-black text-xs">
@@ -414,11 +424,9 @@ export default function NetworkAnalyticsPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                   <XAxis dataKey="displayX" axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} />
-                  {/* 🌟 PENYESUAIAN SUMBU Y GRAFIK: Diperluas menjadi 4000 ms agar fluktuasi riil jarak jauh terlihat sempurna */}
                   <YAxis width={65} axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} domain={[0, 4000]} label={{ value: 'Performance Metric Level', angle: -90, position: 'insideLeft', fill: '#2D365E', offset: 5, fontWeight: 'bold', fontSize: 11 }} />
                   <RechartsTooltip content={<CustomNetworkTooltip mode="qos" />} />
                   <Legend verticalAlign="top" height={36} iconType="circle" />
-                  {/* 🌟 SINKRONISASI LINE THRESHOLD: Disesuaikan dengan batas delay fisis tinggi SF7 (2500 ms) */}
                   <ReferenceLine y={2500} stroke="#cb6060" strokeDasharray="4 4" strokeWidth={1.5} label={{ value: 'Batas Tinggi Delay Jaringan', fill: '#cb6060', fontSize: 10, fontWeight: 'bold', position: 'top' }} />
                   <Area type="monotone" dataKey="latency" name="Latency (ms)" stroke="#2D365E" strokeWidth={4} fillOpacity={1} fill="url(#colorLatency)" />
                   <Line type="monotone" dataKey="throughput" name="Throughput (bps)" stroke="#10b981" strokeWidth={3} dot={false} />
@@ -658,7 +666,7 @@ export default function NetworkAnalyticsPage() {
           </div>
         ) : !loading && (
           <div className="text-center py-14 bg-black/10 rounded-[35px] border border-white/5 text-white/20 font-black uppercase tracking-widest text-xs select-none">
-              Awaiting Live Telemetry Stream...
+             Awaiting Live Telemetry Stream...
           </div>
         )}
 

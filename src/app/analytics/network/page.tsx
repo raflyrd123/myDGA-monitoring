@@ -129,25 +129,14 @@ export default function NetworkAnalyticsPage() {
         const snr = item.lora_snr || 4.5;
         const monthGroup = d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }).toUpperCase();
 
-        // 🌟 PERBAIKAN RUMUS: FUNGSI TRANSMISI KONTINU (100% DINAMIS UNTUK SETIAP VALUE RSSI & SNR)
-        const baseAirtimeDelay = 620; // Baseline dasar ms pemrosesan SF7 awal
-        
-        // 1. Efek Gradasi Sinyal RSSI (Bergerak halus dari jarak dekat -40 dBm hingga jarak jauh -110 dBm)
+        const baseAirtimeDelay = 620; 
         const rssiEffect = Math.abs(-30 - rssi) * 4.5;
-        
-        // 2. Efek Jitter Bising Lingkungan SNR (Semakin kecil SNR, delay meningkat proporsional akibat micro-retries)
         const snrEffect = snr < 12 ? (12 - snr) * 12 : 0;
-        
-        // 3. Efek Penati Antrean Packet Loss
         const lossJitterPenalty = (timeGapSeconds > 12 && !isNewSession) ? Math.min(1500, (timeGapSeconds - 10) * 45) : 0;
         
-        // Akumulasi latensi murni variatif
         let latency = baseAirtimeDelay + rssiEffect + snrEffect + lossJitterPenalty;
-
-        // Pengaman batas atas fisis visual grafik
         if (latency > 4000) latency = 3800 + (packetId % 50);
 
-        // FORMULA THROUGHPUT BERDASARKAN JEDA ABSORB DATABASE
         const payloadSizeBytes = 220; 
         if (timeGapSeconds <= 0) timeGapSeconds = 1; 
         const throughput = (payloadSizeBytes * 8) / timeGapSeconds; 
@@ -293,9 +282,10 @@ export default function NetworkAnalyticsPage() {
     }
   };
 
+  // 🌟 FIX EXPORT PROSES: SEKARANG KOLOM SNR (dB) SAH MASUK KE EXCEL & CSV
   const exportToCSV = () => {
     if (networkData.length === 0) return;
-    const headers = ['Packet ID', 'Status', 'Group Month', 'Date', 'Time', 'Latency riil (ms)', 'RSSI (dBm)', 'Throughput (bps)'];
+    const headers = ['Packet ID', 'Status', 'Group Month', 'Date', 'Time', 'Latency riil (ms)', 'RSSI (dBm)', 'SNR (dB)', 'Throughput (bps)'];
     const rows = networkData.map(log => [
       `PKT-${String(log.id).padStart(3, '0')}`,
       log.isLost ? 'LOST' : 'SUCCESS',
@@ -304,6 +294,7 @@ export default function NetworkAnalyticsPage() {
       log.fullTime,
       log.isLost ? '0' : log.latency.toFixed(0),
       log.isLost ? '0' : log.rssi,
+      log.isLost ? '0' : log.snr.toFixed(1), // Menyisipkan nilai desimal SNR fisis ke baris excel
       log.isLost ? '0' : log.throughput.toFixed(2)
     ]);
     

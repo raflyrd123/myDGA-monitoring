@@ -2,11 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, 
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, 
   Radar as RadarRecharts, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid 
-} from 'recharts'; // 🌟 FIX PATH: Dikembalikan ke pustaka recharts asli lo
-import { supabase } from '../../lib/supabase'; // Hanya database target cloud di sini
-import Image from 'next/image';
+} from 'recharts';
+import { supabase } from '../../lib/supabase';
 
 const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
@@ -15,11 +14,11 @@ const CustomTooltip = ({ active, payload }: any) => {
       <div className="bg-white p-4 rounded-2xl shadow-2xl border border-gray-100 min-w-[200px]">
         <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">{fullDate}</p>
         <div className="flex justify-between items-center mb-1">
-          <span className="text-xs font-bold text-gray-500 uppercase">Timestamp</span>
+          <span className="text-xs font-bold text-gray-500 uppercase">Waktu</span>
           <span className="text-sm font-black text-[#2D365E]">{fullTime}</span>
         </div>
         <div className="flex justify-between items-end border-t border-gray-100 pt-2 mt-2">
-          <span className="text-xs font-bold text-gray-500 uppercase">Value</span>
+          <span className="text-xs font-bold text-gray-500 uppercase">Konsentrasi</span>
           <span className="text-xl font-black text-[#2D365E]">{value.toFixed(2)} ppm</span>
         </div>
       </div>
@@ -29,7 +28,7 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 export default function GasQualityPage() {
-  const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('24h');
+  const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d' | 'all'>('24h');
   const [radarData, setRadarData] = useState<any[]>([]);
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [selectedGas, setSelectedGas] = useState<string>('methane_ch4');
@@ -51,21 +50,24 @@ export default function GasQualityPage() {
 
   const fetchData = async () => {
     setLoading(true);
-    let days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : 30;
-    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-    
-    // UNLIMITED ROW FETCH: Menarik data fisis gas secara berkala bypass batas 1000 baris Supabase
+
+    let query = supabase
+      .from('sensor_logs')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (timeRange !== 'all') {
+      const days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : 30;
+      const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      query = query.gte('created_at', cutoff);
+    }
+
     let allRawData: any[] = [];
     let fromOffset = 0;
     let keepFetching = true;
 
     while (keepFetching) {
-      const { data: chunk, error } = await supabase
-        .from('sensor_logs')
-        .select('*')
-        .gte('created_at', cutoff)
-        .order('created_at', { ascending: true })
-        .range(fromOffset, fromOffset + 999);
+      const { data: chunk, error } = await query.range(fromOffset, fromOffset + 999);
 
       if (error || !chunk || chunk.length === 0) {
         keepFetching = false;
@@ -81,20 +83,18 @@ export default function GasQualityPage() {
 
     if (allRawData.length > 0) {
       const latest = allRawData[allRawData.length - 1];
-      
-      // Radar Komposisi Rata-rata dari SELURUH data historis fisis koper DGA
+
       setRadarData([
-        { subject: 'Hydrogen', value: calculateAvg(allRawData, 'hydrogen_h2') },
-        { subject: 'Methane', value: calculateAvg(allRawData, 'methane_ch4') },
-        { subject: 'Ethane', value: calculateAvg(allRawData, 'ethane_c2h6') },
-        { subject: 'Ethylene', value: calculateAvg(allRawData, 'ethylene_c2h4') },
-        { subject: 'Acetylene', value: calculateAvg(allRawData, 'acetylene_c2h2') },
+        { subject: 'H2', value: calculateAvg(allRawData, 'hydrogen_h2') },
+        { subject: 'CH4', value: calculateAvg(allRawData, 'methane_ch4') },
+        { subject: 'C2H6', value: calculateAvg(allRawData, 'ethane_c2h6') },
+        { subject: 'C2H4', value: calculateAvg(allRawData, 'ethylene_c2h4') },
+        { subject: 'C2H2', value: calculateAvg(allRawData, 'acetylene_c2h2') },
         { subject: 'CO', value: calculateAvg(allRawData, 'carbon_monoxide_co') },
       ]);
-      
+
       runDiagnosis(latest.methane_ch4 || 0, latest.ethylene_c2h4 || 0, latest.acetylene_c2h2 || 0);
 
-      // DYNAMIC DOWNSAMPLING STEP: Grafik seimbang memuat ~55 titik data biar meliuk padat & organik
       const targetPoints = 55;
       const dynamicStep = Math.ceil(allRawData.length / targetPoints) || 1;
 
@@ -111,7 +111,7 @@ export default function GasQualityPage() {
             value: item[selectedGas] || 0
           };
         });
-        
+
       setHistoryData(trend);
     } else {
       setRadarData([]); 
@@ -135,21 +135,21 @@ export default function GasQualityPage() {
     const c2h2p = (c2h2 / total) * 100;
 
     let id = 'DT'; 
-    let label = 'Mixed Thermal and Electrical Fault';
+    let label = 'Thermal and Electrical Fault (DT)';
 
     if (ch4p >= 98) {
       id = 'PD';
-      label = 'Partial Discharge (Corona)';
+      label = 'Partial Discharge (PD)';
     } else if (c2h2p > 4 && c2h2p <= 13 && c2h4p < 20) {
       id = 'T1';
-      label = 'Thermal Fault < 300°C';
+      label = 'Thermal Fault < 300°C (T1)';
     } else if (c2h2p <= 4) {
-      if (c2h4p < 20) { id = 'T1'; label = 'Thermal Fault < 300°C'; }
-      else if (c2h4p >= 20 && c2h4p < 50) { id = 'T2'; label = 'Thermal Fault 300°C - 700°C'; }
-      else { id = 'T3'; label = 'Thermal Fault > 700°C'; }
+      if (c2h4p < 20) { id = 'T1'; label = 'Thermal Fault < 300°C (T1)'; }
+      else if (c2h4p >= 20 && c2h4p < 50) { id = 'T2'; label = 'Thermal Fault 300°C - 700°C (T2)'; }
+      else { id = 'T3'; label = 'Thermal Fault > 700°C (T3)'; }
     } else if (c2h2p > 13) {
-      if (c2h4p < 23) { id = 'D1'; label = 'Discharge of Low Energy (Sparking)'; }
-      else { id = 'D2'; label = 'Discharge of High Energy (Arcing)'; }
+      if (c2h4p < 23) { id = 'D1'; label = 'Low Energy Discharge (D1)'; }
+      else { id = 'D2'; label = 'High Energy Discharge (D2)'; }
     }
 
     setDuval({ id, label, ch4p, c2h4p, c2h2p });
@@ -162,41 +162,61 @@ export default function GasQualityPage() {
 
   return (
     <div className="p-10 text-[#2D365E] min-h-screen bg-[#f8fafc]">
+      
+      {/* HEADER BAR */}
       <div className="flex justify-between items-center mb-10">
         <h1 className="text-4xl font-black uppercase tracking-tight text-[#2D365E]">Analytics - Gas Quality</h1>
         <div className="flex bg-white rounded-xl p-1 shadow-sm border border-gray-100">
-          {(['24h', '7d', '30d'] as const).map((range) => (
-            <button key={range} onClick={() => setTimeRange(range)} className={`px-6 py-2 rounded-lg font-bold transition-all ${timeRange === range ? 'bg-[#2D365E] text-white' : 'text-gray-400 hover:text-[#2D365E]'}`}>{range.toUpperCase()}</button>
+          {(['24h', '7d', '30d', 'all'] as const).map((range) => (
+            <button 
+              key={range} 
+              onClick={() => setTimeRange(range)} 
+              className={`px-6 py-2 rounded-lg font-bold transition-all ${timeRange === range ? 'bg-[#2D365E] text-white' : 'text-gray-400 hover:text-[#2D365E]'}`}
+            >
+              {range.toUpperCase()}
+            </button>
           ))}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-8">
+        
+        {/* RADAR COMPOSITION CARD */}
         <div className="lg:col-span-6 bg-white rounded-[50px] p-10 shadow-2xl min-h-[600px] flex flex-col relative text-[#2D365E]">
-          <h2 className="text-2xl font-black mb-8 border-b pb-4 uppercase tracking-tighter">Gas Radar Composition (Avg)</h2>
+          <h2 className="text-2xl font-black mb-8 border-b pb-4 uppercase tracking-tighter">Komposisi Rata-Rata Gas</h2>
           <div className="flex-grow flex items-center justify-center">
-            {loading ? <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2D365E]"></div> : radarData.length > 0 ? (
+            {loading ? (
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2D365E]"></div>
+            ) : radarData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart cx="50%" cy="50%" outerRadius="75%" data={radarData}>
                   <PolarGrid stroke="#E1E6E4" />
                   <PolarAngleAxis dataKey="subject" tick={{ fill: '#2D365E', fontWeight: 'bold', fontSize: 13 }} />
                   <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                  <RadarRecharts name="Gas Level" dataKey="value" stroke="#2D365E" strokeWidth={3} fill="#2D365E" fillOpacity={0.4} />
-                  <RechartsTooltip formatter={(value: any) => [`${Number(value).toFixed(2)} ppm`, 'Gas Level']} />
+                  <RadarRecharts name="Konsentrasi" dataKey="value" stroke="#2D365E" strokeWidth={3} fill="#2D365E" fillOpacity={0.4} />
+                  <RechartsTooltip formatter={(value: any) => [`${Number(value).toFixed(2)} ppm`, 'Konsentrasi']} />
                 </RadarChart>
               </ResponsiveContainer>
-            ) : <div className="text-center font-black opacity-20 uppercase tracking-[0.3em]">No Logs Available</div>}
+            ) : (
+              <div className="text-center font-black opacity-20 uppercase tracking-[0.3em]">Tidak Ada Data</div>
+            )}
           </div>
         </div>
 
+        {/* DUVAL TRIANGLE CARD */}
         <div className="lg:col-span-6 bg-[#2D365E] rounded-[50px] p-10 shadow-2xl text-white flex flex-col border border-white/5 relative min-h-[600px]">
-          <h2 className="text-2xl font-black mb-6 uppercase text-center tracking-tighter">Duval Triangle Analysis</h2>
+          <h2 className="text-2xl font-black mb-6 uppercase text-center tracking-tighter">Analisis Segitiga Duval</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 flex-grow items-center">
             <div className="md:col-span-6 relative w-full aspect-square bg-black/10 rounded-[35px] border border-white/5 flex items-center justify-center p-2">
-              <img src="/images/duval/base-triangle.png" className="absolute inset-0 w-full h-full object-contain p-4 z-10 pointer-events-none" />
-              {[ 'PD', 'T1', 'T2', 'T3', 'D1', 'D2', 'DT' ].map((zid) => (
-                <img key={zid} src={`/images/duval/zone-${zid.toLowerCase()}.png`} className={`absolute inset-0 w-full h-full object-contain p-4 transition-opacity duration-1000 ${duval.id === zid ? 'opacity-100 saturate-150' : 'opacity-5 saturate-0'}`} />
+              <img src="/images/duval/base-triangle.png" className="absolute inset-0 w-full h-full object-contain p-4 z-10 pointer-events-none" alt="Duval Triangle" />
+              {['PD', 'T1', 'T2', 'T3', 'D1', 'D2', 'DT'].map((zid) => (
+                <img 
+                  key={zid} 
+                  src={`/images/duval/zone-${zid.toLowerCase()}.png`} 
+                  className={`absolute inset-0 w-full h-full object-contain p-4 transition-opacity duration-1000 ${duval.id === zid ? 'opacity-100 saturate-150' : 'opacity-5 saturate-0'}`} 
+                  alt={zid} 
+                />
               ))}
             </div>
 
@@ -208,11 +228,11 @@ export default function GasQualityPage() {
               </div>
 
               <div className="bg-white/10 p-5 rounded-[30px] border border-white/20 text-center shadow-[inset_0_0_20px_rgba(255,255,255,0.05)]">
-                <p className="text-[9px] font-black uppercase text-white/40 tracking-[0.2em] mb-2">DIAGNOSIS STATUS</p>
+                <p className="text-[9px] font-black uppercase text-white/40 tracking-[0.2em] mb-2">Status Diagnosis</p>
                 <div className="flex flex-col items-center gap-2">
                   {duval.id !== 'NONE' && (
                     <span className="bg-[#ff4d4d] text-white px-4 py-1 rounded-lg text-xs font-black shadow-[0_0_12px_rgba(255,77,77,0.4)]">
-                      ZONE {duval.id}
+                      ZONA {duval.id}
                     </span>
                   )}
                   <h3 className="text-base font-black uppercase text-white tracking-tight leading-tight">
@@ -228,19 +248,24 @@ export default function GasQualityPage() {
             <div className="bg-black/10 p-2 rounded-xl border border-white/5"><span className="font-bold text-[#ec4899] block">T1 (Thermal)</span> Temp &lt; 300°C</div>
             <div className="bg-black/10 p-2 rounded-xl border border-white/5"><span className="font-bold text-[#a855f7] block">T2 (Thermal)</span> 300°C - 700°C</div>
             <div className="bg-black/10 p-2 rounded-xl border border-white/5"><span className="font-bold text-[#f97316] block">T3 (Thermal)</span> Temp &gt; 700°C</div>
-            <div className="bg-black/10 p-2 rounded-xl border border-white/5"><span className="font-bold text-[#38bdf8] block">D1 (Low Energy)</span> C2H2 &gt; 13% | Spark</div>
-            <div className="bg-black/10 p-2 rounded-xl border border-white/5"><span className="font-bold text-[#4ade80] block">D2 (High Energy)</span> C2H2 &gt; 29% | Arc</div>
-            <div className="bg-black/10 p-2 rounded-xl border border-white/5 col-span-2"><span className="font-bold text-[#eab308] block">DT (Mixed)</span> Indeterminate Fault Quadran</div>
+            <div className="bg-black/10 p-2 rounded-xl border border-white/5"><span className="font-bold text-[#38bdf8] block">D1 (Low Energy)</span> Sparking</div>
+            <div className="bg-black/10 p-2 rounded-xl border border-white/5"><span className="font-bold text-[#4ade80] block">D2 (High Energy)</span> Arcing</div>
+            <div className="bg-black/10 p-2 rounded-xl border border-white/5 col-span-2"><span className="font-bold text-[#eab308] block">DT (Mixed)</span> Mixed Fault</div>
           </div>
         </div>
       </div>
 
+      {/* TREND ANALYSIS CHART CARD */}
       <div className="bg-white rounded-[50px] p-10 shadow-2xl flex flex-col h-[550px] text-[#2D365E]">
         <div className="flex justify-between items-center mb-8 border-b pb-4">
           <h2 className="text-2xl font-black uppercase tracking-tighter">
-            Trend Analysis - <span className="text-[#2D365E]">{getActiveGasLabel()}</span>
+            Tren Gas - <span className="text-[#2D365E]">{getActiveGasLabel()}</span>
           </h2>
-          <select value={selectedGas} onChange={(e) => setSelectedGas(e.target.value)} className="bg-[#2D365E] text-white px-6 py-2 rounded-xl font-bold text-sm outline-none cursor-pointer border border-transparent hover:bg-[#1e2542] transition-colors">
+          <select 
+            value={selectedGas} 
+            onChange={(e) => setSelectedGas(e.target.value)} 
+            className="bg-[#2D365E] text-white px-6 py-2 rounded-xl font-bold text-sm outline-none cursor-pointer border border-transparent hover:bg-[#1e2542] transition-colors"
+          >
             {gasOptions.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
           </select>
         </div>
@@ -266,9 +291,12 @@ export default function GasQualityPage() {
                 <Area type="monotone" dataKey="value" stroke="#2D365E" strokeWidth={4} fillOpacity={1} fill="url(#colorValue)" />
               </AreaChart>
             </ResponsiveContainer>
-          ) : !loading && <div className="flex items-center justify-center h-full font-black opacity-20 uppercase tracking-[0.3em]">No History Available</div>}
+          ) : !loading && (
+            <div className="flex items-center justify-center h-full font-black opacity-20 uppercase tracking-[0.3em]">Tidak Ada Data</div>
+          )}
         </div>
       </div>
+
     </div>
   );
 }

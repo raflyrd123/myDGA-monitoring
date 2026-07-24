@@ -21,11 +21,11 @@ export default function NotificationsPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // --- STATE EMAIL CHANNELS ---
+  // --- EMAIL CHANNELS STATE ---
   const [emailList, setEmailList] = useState<string[]>([]);
   const [newEmailInput, setNewEmailInput] = useState('');
 
-  // --- PAGINASI ---
+  // --- PAGINATION ---
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 6;
 
@@ -78,7 +78,7 @@ export default function NotificationsPage() {
     }
   };
 
-  // TAMBAH EMAIL
+  // ADD EMAIL
   const handleAddEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     const email = newEmailInput.trim().toLowerCase();
@@ -97,7 +97,7 @@ export default function NotificationsPage() {
     }
   };
 
-  // HAPUS EMAIL
+  // REMOVE EMAIL
   const handleRemoveEmail = async (emailToRemove: string) => {
     const updatedList = emailList.filter(email => email !== emailToRemove);
     setEmailList(updatedList);
@@ -111,7 +111,7 @@ export default function NotificationsPage() {
       });
   };
 
-  // MANAJEMEN SELECT & HAPUS
+  // SELECTION & DELETE MANAGEMENT
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => 
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
@@ -153,7 +153,7 @@ export default function NotificationsPage() {
 
   const clearAllNotifications = async () => {
     if (notifications.length === 0) return;
-    if (confirm('Apakah Anda yakin ingin menghapus semua notifikasi?')) {
+    if (confirm('Are you sure you want to delete all notifications?')) {
       const { error } = await supabase.from('notifications').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       if (!error) {
         setNotifications([]);
@@ -172,7 +172,7 @@ export default function NotificationsPage() {
     return <AlertTriangle size={18} className="text-rose-500" />;
   };
 
-  // Paginasi
+  // Pagination calculations
   const totalPages = Math.ceil(notifications.length / rowsPerPage);
   const indexOfLastRow = currentPage * rowsPerPage;
   const indexOfFirstRow = indexOfLastRow - rowsPerPage;
@@ -185,7 +185,7 @@ export default function NotificationsPage() {
       {/* TOP HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
         <div>
-          <h1 className="text-4xl font-black uppercase tracking-tight text-[#2D365E]">Notifikasi</h1>
+          <h1 className="text-4xl font-black uppercase tracking-tight text-[#2D365E]">Notifications</h1>
         </div>
         
         {!loading && notifications.length > 0 && (
@@ -195,7 +195,7 @@ export default function NotificationsPage() {
               className="bg-white border border-gray-200 text-[#2D365E] text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm"
             >
               {selectedIds.length === currentTableRows.length && currentTableRows.length > 0 ? <CheckSquare size={16} /> : <Square size={16} />}
-              Pilih Semua
+              Select All
             </button>
             
             {selectedIds.length > 0 && (
@@ -203,7 +203,7 @@ export default function NotificationsPage() {
                 onClick={deleteSelected}
                 className="bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-md"
               >
-                <Trash2 size={14} /> Hapus Terpilih ({selectedIds.length})
+                <Trash2 size={14} /> Delete Selected ({selectedIds.length})
               </button>
             )}
 
@@ -211,7 +211,7 @@ export default function NotificationsPage() {
               onClick={clearAllNotifications}
               className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-md"
             >
-              <Trash2 size={14} /> Hapus Semua ({notifications.length})
+              <Trash2 size={14} /> Delete All ({notifications.length})
             </button>
           </div>
         )}
@@ -219,19 +219,19 @@ export default function NotificationsPage() {
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
         
-        {/* PANEL UTAMA: LIST NOTIFIKASI */}
+        {/* MAIN PANEL: NOTIFICATION LIST */}
         <div className="xl:col-span-8 space-y-6">
           
-          {/* BANNER NOTIFIKASI TERBARU */}
+          {/* LATEST ALERT BANNER */}
           {!loading && latestAlert && (
             <div className="bg-rose-600 rounded-[30px] p-6 text-white shadow-xl relative overflow-hidden border border-rose-500">
               <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-rose-200 mb-3 bg-black/20 w-fit px-3 py-1 rounded-lg">
-                <Bell size={14} className="animate-bounce" /> Peringatan Terbaru
+                <Bell size={14} className="animate-bounce" /> Latest Alert
               </div>
               <h2 className="text-xl font-black tracking-tight mb-2">{latestAlert.title}</h2>
               <p className="text-sm font-medium text-rose-50/90 leading-relaxed mb-4">{latestAlert.message}</p>
               <div className="text-xs font-mono font-bold text-rose-200 flex items-center gap-1.5">
-                <Clock size={12} /> {new Date(latestAlert.created_at).toLocaleString('id-ID')}
+                <Clock size={12} /> {new Date(latestAlert.created_at).toLocaleString('en-US')}
               </div>
             </div>
           )}
@@ -240,7 +240,7 @@ export default function NotificationsPage() {
           {loading ? (
             <div className="flex flex-col items-center justify-center bg-white rounded-[35px] p-20 shadow-xl border border-gray-100">
               <RefreshCw className="animate-spin text-[#2D365E]/20 mb-3" size={36} />
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Memuat Notifikasi...</p>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Loading Notifications...</p>
             </div>
           ) : notifications.length > 0 ? (
             <div className="space-y-4">
@@ -270,7 +270,7 @@ export default function NotificationsPage() {
                           <h4 className="font-black text-sm text-[#2D365E]">{notif.title}</h4>
                           <span className="text-[11px] font-mono font-bold text-gray-400 whitespace-nowrap flex items-center gap-1">
                             <Clock size={11} />
-                            {new Date(notif.created_at).toLocaleString('id-ID')}
+                            {new Date(notif.created_at).toLocaleString('en-US')}
                           </span>
                         </div>
                         <p className="text-xs text-gray-600 font-medium leading-relaxed">{notif.message}</p>
@@ -279,7 +279,7 @@ export default function NotificationsPage() {
                       <button 
                         onClick={() => deleteSingle(notif.id)}
                         className="p-2 text-gray-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all shrink-0"
-                        title="Hapus Notifikasi"
+                        title="Delete Notification"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -288,10 +288,10 @@ export default function NotificationsPage() {
                 })}
               </div>
 
-              {/* PAGINASI */}
+              {/* PAGINATION */}
               {totalPages > 1 && (
                 <div className="flex justify-between items-center px-4 pt-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                  <span>Menampilkan {indexOfFirstRow + 1} - {Math.min(indexOfLastRow, notifications.length)} dari {notifications.length} data</span>
+                  <span>Showing {indexOfFirstRow + 1} - {Math.min(indexOfLastRow, notifications.length)} of {notifications.length} entries</span>
                   <div className="flex items-center gap-2">
                     <button 
                       onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} 
@@ -300,7 +300,7 @@ export default function NotificationsPage() {
                     >
                       <ChevronLeft size={16} />
                     </button>
-                    <span className="text-[#2D365E] px-2 font-black">Halaman {currentPage} dari {totalPages}</span>
+                    <span className="text-[#2D365E] px-2 font-black">Page {currentPage} of {totalPages}</span>
                     <button 
                       onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} 
                       disabled={currentPage === totalPages} 
@@ -315,22 +315,22 @@ export default function NotificationsPage() {
           ) : (
             <div className="bg-white rounded-[35px] border border-gray-100 p-16 flex flex-col items-center justify-center text-center shadow-xl">
               <ShieldCheck size={48} className="text-emerald-500 mb-3" />
-              <h2 className="text-base font-black uppercase text-[#2D365E]">Tidak Ada Notifikasi</h2>
+              <h2 className="text-base font-black uppercase text-[#2D365E]">No Notifications Found</h2>
             </div>
           )}
         </div>
 
-        {/* PANEL KANAN: EMAIL PENERIMA ALERT */}
+        {/* RIGHT PANEL: ALERT RECIPIENT EMAILS */}
         <div className="xl:col-span-4 bg-white rounded-[35px] p-6 shadow-xl border border-gray-100 space-y-5">
           <div className="flex items-center gap-2 border-b border-gray-100 pb-4">
             <MailCheck size={20} className="text-[#2D365E]" />
-            <h2 className="text-base font-black uppercase tracking-tight text-[#2D365E]">Email Penerima Alert</h2>
+            <h2 className="text-base font-black uppercase tracking-tight text-[#2D365E]">Alert Recipient Emails</h2>
           </div>
 
           <form onSubmit={handleAddEmail} className="flex gap-2">
             <input 
               type="email" 
-              placeholder="Masukkan email..."
+              placeholder="Enter email..."
               value={newEmailInput}
               onChange={(e) => setNewEmailInput(e.target.value)}
               className="flex-grow p-3 bg-[#F4F7FE] text-xs font-bold rounded-xl outline-none focus:ring-1 focus:ring-[#2D365E] border border-gray-100 text-[#2D365E]"
@@ -353,7 +353,7 @@ export default function NotificationsPage() {
                     onClick={() => handleRemoveEmail(email)} 
                     type="button" 
                     className="text-gray-400 hover:text-rose-500 hover:bg-rose-50 transition-all p-1 rounded-lg"
-                    title="Hapus Email"
+                    title="Delete Email"
                   >
                     <X size={16} />
                   </button>
@@ -361,7 +361,7 @@ export default function NotificationsPage() {
               ))
             ) : (
               <div className="text-center py-8 border border-dashed border-gray-200 rounded-xl select-none text-xs font-bold text-gray-400">
-                Belum ada email terdaftar
+                No emails registered yet
               </div>
             )}
           </div>

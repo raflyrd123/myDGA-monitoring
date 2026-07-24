@@ -134,20 +134,18 @@ export default function NetworkAnalyticsPage() {
         if (item.timestamp_kirim) {
           const formattedSentStr = String(item.timestamp_kirim).includes('T')
             ? String(item.timestamp_kirim)
-            : String(item.timestamp_kirim).replace(' ', 'T') + '+07:00'; // Set ke WIB (UTC+7)
+            : String(item.timestamp_kirim).replace(' ', 'T') + '+07:00'; 
             
           const waktuKirimRaspi = new Date(formattedSentStr).getTime();
           
           if (!isNaN(waktuKirimRaspi)) {
             const calculatedDiff = waktuDiterimaWeb - waktuKirimRaspi;
-            // Jika selisihnya positif dan rasional (< 30 detik), gunakan Real Latency!
             if (calculatedDiff > 0 && calculatedDiff < 30000) {
               realLatency = calculatedDiff;
             }
           }
         }
 
-        // Estimasi Fallback jika data tidak memiliki timestamp_kirim RTC valid
         const baseAirtimeDelay = 620; 
         const rssiEffect = Math.abs(-30 - rssi) * 4.5;
         const snrEffect = snr < 12 ? (12 - snr) * 12 : 0;
@@ -176,6 +174,8 @@ export default function NetworkAnalyticsPage() {
                 displayX: '', 
                 fullDate: d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
                 fullTime: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                timestamp_kirim: '-',
+                created_at: item.created_at,
                 rawDate: new Date(waktuDiterimaWeb - 1000), 
                 monthGroup,
                 latency: 0,
@@ -198,6 +198,8 @@ export default function NetworkAnalyticsPage() {
           displayX: '', 
           fullDate: d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
           fullTime: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          timestamp_kirim: item.timestamp_kirim || '-',
+          created_at: item.created_at,
           rawDate: d, 
           monthGroup,
           latency,
@@ -306,13 +308,12 @@ export default function NetworkAnalyticsPage() {
 
   const exportToCSV = () => {
     if (networkData.length === 0) return;
-    const headers = ['Packet ID', 'Status', 'Group Month', 'Date', 'Time', 'Latency riil (ms)', 'RSSI (dBm)', 'SNR (dB)', 'Throughput (bps)'];
+    const headers = ['Packet ID', 'Status', 'Timestamp Dibuat (RTC Alat)', 'Timestamp Diterima (Cloud)', 'Latency (ms)', 'RSSI (dBm)', 'SNR (dB)', 'Throughput (bps)'];
     const rows = networkData.map(log => [
       `PKT-${String(log.id).padStart(3, '0')}`,
-      log.isLost ? 'LOST' : 'SUCCESS',
-      log.monthGroup,
-      `"${log.fullDate}"`,
-      log.fullTime,
+      log.isLost ? 'FAILED (LOST)' : 'SUCCESS',
+      `"${log.timestamp_kirim}"`,
+      `"${new Date(log.created_at).toLocaleString('id-ID')}"`,
       log.isLost ? '0' : log.latency.toFixed(0),
       log.isLost ? '0' : log.rssi,
       log.isLost ? '0' : log.snr.toFixed(1),
@@ -325,7 +326,7 @@ export default function NetworkAnalyticsPage() {
     
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `LoRa_Complete_QoS_Throughput_Report_${timeRange}.csv`);
+    link.setAttribute("download", `LoRa_Network_QoS_Report_${timeRange}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -542,15 +543,16 @@ export default function NetworkAnalyticsPage() {
             </div>
             
             <div className="overflow-x-auto w-full mb-6">
-              <table className="w-full text-left border-collapse min-w-[1600px]">
+              <table className="w-full text-left border-collapse min-w-[1700px]">
                 <thead>
                   <tr className="border-b border-white/10 text-white/40 text-[10px] font-black uppercase tracking-widest">
                     <th className="pb-3 pl-4">Packet ID</th>
-                    <th className="pb-3">Timestamp Log</th>
-                    <th className="pb-3 text-center">Status</th>
+                    <th className="pb-3">Timestamp Dibuat (RTC Alat)</th>
+                    <th className="pb-3">Timestamp Diterima (Cloud)</th>
+                    <th className="pb-3 text-center">Status Keterangan</th>
                     <th className="pb-3 text-center">Data Path Flow</th>
                     <th className="pb-3">Network Latency</th>
-                    <th className="pb-3">RF Strength (RSSI)</th>
+                    <th className="pb-3">RF Strength (RSSI / SNR)</th>
                     <th className="pb-3 pr-4">Throughput Rate</th>
                   </tr>
                 </thead>
@@ -564,13 +566,15 @@ export default function NetworkAnalyticsPage() {
                           <td className="py-3.5 pl-4 font-mono font-black text-rose-400">
                             #PKT-{String(log.id).padStart(3, '0')}
                           </td>
-                          <td className="py-4 opacity-60">
-                            <span className="block text-rose-300 font-extrabold">{log.fullTime}</span>
-                            <span className="block text-[9px] text-rose-400/60 font-medium mt-0.5">{log.fullDate}</span>
+                          <td className="py-4 font-mono text-rose-300/60">
+                            -
+                          </td>
+                          <td className="py-4 font-mono text-rose-300/60">
+                            {new Date(log.created_at).toLocaleString('id-ID')}
                           </td>
                           <td className="py-4 text-center">
                             <span className="px-3 py-1 rounded-lg text-[9px] font-black bg-rose-500/20 border border-rose-500/30 text-rose-400 tracking-wide uppercase">
-                              FAILED
+                              FAILED (LOST)
                             </span>
                           </td>
                           <td className="py-4">
@@ -600,10 +604,15 @@ export default function NetworkAnalyticsPage() {
                         <td className="py-3.5 pl-4 font-mono text-white/40 group-hover:text-white">
                           #PKT-{String(log.id).padStart(3, '0')}
                         </td>
-                        <td className="py-4">
-                          <span className="block text-white font-extrabold">{log.fullTime}</span>
-                          <span className="block text-[9px] text-white/40 font-medium mt-0.5">{log.fullDate}</span>
+                        {/* TIMESTAMP DIBUAT (RTC RASPI) */}
+                        <td className="py-4 font-mono text-cyan-300 font-bold">
+                          {log.timestamp_kirim}
                         </td>
+                        {/* TIMESTAMP DITERIMA (CLOUD) */}
+                        <td className="py-4 font-mono text-white/70">
+                          {new Date(log.created_at).toLocaleString('id-ID')}
+                        </td>
+                        {/* STATUS KETERANGAN BERHASIL */}
                         <td className="py-4 text-center">
                           <span className="px-3 py-1 rounded-lg text-[9px] font-black bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 tracking-wide uppercase">
                             SUCCESS

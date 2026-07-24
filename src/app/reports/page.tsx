@@ -2,7 +2,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Download, FileSpreadsheet, AlertCircle, Calendar, ArrowUpDown, ChevronLeft, ChevronRight, Hash, ChevronDown, Trash2 } from 'lucide-react';
+import { 
+  Download, FileSpreadsheet, AlertCircle, Calendar, ArrowUpDown, 
+  ChevronLeft, ChevronRight, Hash, ChevronDown, Trash2, ArrowRight, Activity 
+} from 'lucide-react';
 
 export default function ReportsPage() {
   const [logs, setLogs] = useState<any[]>([]);
@@ -449,9 +452,9 @@ export default function ReportsPage() {
       {viewDetail ? (
         <div className="bg-white rounded-[40px] shadow-2xl border border-gray-100 overflow-hidden flex flex-col p-6">
           
-          <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-50">
+          <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-100">
             <h2 className="text-sm font-black uppercase tracking-wider text-[#2D365E] flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-cyan-500" /> Master Data for {getMonthName(viewDetail.month)} {viewDetail.year} ({logs.length} Entries)
+              <Calendar className="w-4 h-4 text-cyan-500" /> Master Data Logs for {getMonthName(viewDetail.month)} {viewDetail.year} ({logs.length} Entries)
             </h2>
             
             <div className="flex items-center gap-3">
@@ -481,12 +484,22 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* RESPONSIVE TABLE WITH BOTH SENSOR & NETWORK COLUMNS */}
-          <div className="overflow-x-auto w-full mb-6 rounded-2xl border border-gray-100">
-            <table className="w-full text-left border-collapse min-w-[2300px]">
+          {/* HIGH-END RESPONSIVE MASTER TABLE */}
+          <div className="overflow-x-auto w-full mb-6 rounded-2xl border border-gray-100 shadow-inner">
+            <table className="w-full text-left border-collapse min-w-[2500px]">
               <thead>
-                <tr className="bg-gray-50/70 border-b border-gray-100 text-[10px] font-black uppercase tracking-widest text-gray-400">
-                  <th className="p-4 pl-6 text-center whitespace-nowrap w-12">
+                {/* TOP CATEGORY GROUPING HEADER */}
+                <tr className="bg-[#2D365E] text-white text-[9px] font-black uppercase tracking-[0.2em] text-center border-b border-white/10">
+                  <th colSpan={5} className="py-2.5 border-r border-white/10">1. Transmission & Log Info</th>
+                  <th colSpan={9} className="py-2.5 border-r border-white/10 bg-[#252d4e]">2. DGA Gas Dissolved Analysis</th>
+                  <th colSpan={5} className="py-2.5 border-r border-white/10">3. Transformer & Environment Health</th>
+                  <th colSpan={4} className="py-2.5 border-r border-white/10 bg-[#1e2544]">4. LoRa Communication QoS</th>
+                  <th colSpan={1} className="py-2.5">Action</th>
+                </tr>
+
+                {/* DETAILED COLUMN HEADERS */}
+                <tr className="bg-gray-50/90 border-b border-gray-200 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                  <th className="p-3.5 pl-6 text-center whitespace-nowrap w-12">
                     <input 
                       type="checkbox"
                       checked={currentTableRows.length > 0 && currentTableRows.every(r => selectedIds.includes(r.id))}
@@ -501,41 +514,54 @@ export default function ReportsPage() {
                       className="w-4 h-4 rounded border-gray-300 text-[#2D365E] focus:ring-[#2D365E] cursor-pointer"
                     />
                   </th>
-                  <th className="p-4 whitespace-nowrap">Sent Time</th>
-                  <th className="p-4 whitespace-nowrap">Received Time</th>
-                  <th className="p-4 text-center whitespace-nowrap">Packet ID</th>
-                  <th className="p-4 text-center whitespace-nowrap">H2</th>
-                  <th className="p-4 text-center whitespace-nowrap">CO</th>
-                  <th className="p-4 text-center whitespace-nowrap">NH3</th>
-                  <th className="p-4 text-center whitespace-nowrap">CH4</th>
-                  <th className="p-4 text-center whitespace-nowrap">C3H8</th>
-                  <th className="p-4 text-center whitespace-nowrap">C4H10</th>
-                  <th className="p-4 text-center whitespace-nowrap">C2H4</th>
-                  <th className="p-4 text-center whitespace-nowrap">C2H2</th>
-                  <th className="p-4 text-center whitespace-nowrap">C2H6</th>
-                  <th className="p-4 text-center whitespace-nowrap">Temperature</th>
-                  <th className="p-4 text-center whitespace-nowrap">Humidity</th>
-                  <th className="p-4 text-center whitespace-nowrap">Oil Color</th>
-                  <th className="p-4 text-center whitespace-nowrap">Water Level</th>
-                  <th className="p-4 text-center whitespace-nowrap">Float Status</th>
-                  <th className="p-4 text-center whitespace-nowrap text-indigo-600 bg-indigo-50/50">Latency (ms)</th>
-                  <th className="p-4 text-center whitespace-nowrap text-blue-600 bg-blue-50/50">RSSI (dBm)</th>
-                  <th className="p-4 text-center whitespace-nowrap text-cyan-600 bg-cyan-50/50">SNR (dB)</th>
-                  <th className="p-4 text-center whitespace-nowrap text-emerald-600 bg-emerald-50/50">Throughput (bps)</th>
-                  <th className="p-4 text-center pr-6 whitespace-nowrap">Action</th>
+                  <th className="p-3.5 whitespace-nowrap">Sent Time</th>
+                  <th className="p-3.5 whitespace-nowrap">Received Time</th>
+                  <th className="p-3.5 text-center whitespace-nowrap">Packet ID</th>
+                  <th className="p-3.5 text-center whitespace-nowrap border-r border-gray-200">Transmission Path</th>
+
+                  {/* DGA GASES */}
+                  <th className="p-3.5 text-center whitespace-nowrap">H2</th>
+                  <th className="p-3.5 text-center whitespace-nowrap">CO</th>
+                  <th className="p-3.5 text-center whitespace-nowrap">NH3</th>
+                  <th className="p-3.5 text-center whitespace-nowrap">CH4</th>
+                  <th className="p-3.5 text-center whitespace-nowrap">C3H8</th>
+                  <th className="p-3.5 text-center whitespace-nowrap">C4H10</th>
+                  <th className="p-3.5 text-center whitespace-nowrap">C2H4</th>
+                  <th className="p-3.5 text-center whitespace-nowrap">C2H2</th>
+                  <th className="p-3.5 text-center whitespace-nowrap border-r border-gray-200">C2H6</th>
+
+                  {/* HEALTH & ENVIRONMENT */}
+                  <th className="p-3.5 text-center whitespace-nowrap">Temp</th>
+                  <th className="p-3.5 text-center whitespace-nowrap">Humidity</th>
+                  <th className="p-3.5 text-center whitespace-nowrap">Oil Color</th>
+                  <th className="p-3.5 text-center whitespace-nowrap">Water Level</th>
+                  <th className="p-3.5 text-center whitespace-nowrap border-r border-gray-200">Float Switch</th>
+
+                  {/* QOS */}
+                  <th className="p-3.5 text-center whitespace-nowrap text-indigo-600 bg-indigo-50/50">Latency</th>
+                  <th className="p-3.5 text-center whitespace-nowrap text-blue-600 bg-blue-50/50">RSSI</th>
+                  <th className="p-3.5 text-center whitespace-nowrap text-cyan-600 bg-cyan-50/50">SNR</th>
+                  <th className="p-3.5 text-center whitespace-nowrap text-emerald-600 bg-emerald-50/50 border-r border-gray-200">Throughput</th>
+
+                  <th className="p-3.5 text-center pr-6 whitespace-nowrap">Action</th>
                 </tr>
               </thead>
-              <tbody className="text-xs font-bold divide-y divide-gray-50">
+
+              <tbody className="text-xs font-bold divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={23} className="p-20 text-center animate-pulse font-black text-gray-300 text-lg tracking-widest">
-                      LOADING DATA...
+                    <td colSpan={24} className="p-20 text-center animate-pulse font-black text-gray-300 text-lg tracking-widest">
+                      LOADING MASTER TELEMETRY DATA...
                     </td>
                   </tr>
                 ) : currentTableRows.length > 0 ? (
                   currentTableRows.map((log, i) => (
-                    <tr key={log.id || i} className={`transition-colors ${selectedIds.includes(log.id) ? 'bg-blue-50/40 hover:bg-blue-50/60' : 'hover:bg-gray-50/40'}`}>
-                      <td className="p-4 pl-6 text-center">
+                    <tr 
+                      key={log.id || i} 
+                      className={`transition-colors hover:bg-slate-50/80 ${selectedIds.includes(log.id) ? 'bg-indigo-50/30' : ''}`}
+                    >
+                      {/* CHECKBOX */}
+                      <td className="p-3.5 pl-6 text-center">
                         <input 
                           type="checkbox"
                           checked={selectedIds.includes(log.id)}
@@ -549,42 +575,70 @@ export default function ReportsPage() {
                           className="w-4 h-4 rounded border-gray-300 text-[#2D365E] focus:ring-[#2D365E] cursor-pointer"
                         />
                       </td>
-                      <td className="p-4 text-[#2D365E] font-mono font-black whitespace-nowrap">
+
+                      {/* LOG INFO */}
+                      <td className="p-3.5 text-[#2D365E] font-mono font-black whitespace-nowrap">
                         {formatWaktu(log.timestamp_kirim)}
                       </td>
-                      <td className="p-4 text-gray-500 font-mono whitespace-nowrap">
+                      <td className="p-3.5 text-gray-500 font-mono whitespace-nowrap">
                         {new Date(log.created_at).toLocaleString('en-US')}
                       </td>
-                      <td className="p-4 text-center text-gray-400 font-mono">
-                        #PKT-{String(log.packet_id || indexOfFirstRow + i + 1).padStart(3, '0')}
+                      <td className="p-3.5 text-center">
+                        <span className="bg-slate-100 text-slate-700 font-mono text-[10px] font-black px-2.5 py-1 rounded-md border border-slate-200">
+                          #PKT-{String(log.packet_id || indexOfFirstRow + i + 1).padStart(3, '0')}
+                        </span>
                       </td>
-                      <td className="p-4 text-center text-[#2D365E] font-mono">{log.hydrogen_h2 ?? 0} ppm</td>
-                      <td className="p-4 text-center text-[#2D365E] font-mono">{log.carbon_monoxide_co ?? 0} ppm</td>
-                      <td className="p-4 text-center text-[#2D365E] font-mono">{log.ammonia_nh3 ?? 0} ppm</td>
-                      <td className="p-4 text-center text-[#2D365E] font-mono">{log.methane_ch4 ?? 0} ppm</td>
-                      <td className="p-4 text-center text-[#2D365E] font-mono">{log.propane_c3h8 ?? 0} ppm</td>
-                      <td className="p-4 text-center text-[#2D365E] font-mono">{log.butane_c4h10 ?? 0} ppm</td>
-                      <td className="p-4 text-center text-[#2D365E] font-mono">{log.ethylene_c2h4 ?? 0} ppm</td>
-                      <td className="p-4 text-center text-[#2D365E] font-mono">{log.acetylene_c2h2 ?? 0} ppm</td>
-                      <td className="p-4 text-center text-[#2D365E] font-mono">{log.ethane_c2h6 ?? 0} ppm</td>
-                      <td className="p-4 text-center text-[#2D365E] font-mono">{log.temperature_c ?? 0}°C</td>
-                      <td className="p-4 text-center text-[#2D365E] font-mono">{log.humidity_pct ?? 0}%</td>
-                      <td className="p-4 text-center text-[#2D365E] font-mono">{log.oil_color_pct ?? 0}%</td>
-                      <td className="p-4 text-center text-[#2D365E] font-mono">
+
+                      {/* TRANSMISSION TOPOLOGY PATH */}
+                      <td className="p-3.5 border-r border-gray-100">
+                        <div className="flex items-center justify-center gap-1.5 text-[9px] font-black text-gray-500 bg-gray-50 py-1 px-2.5 rounded-lg border border-gray-200/60 max-w-[230px] mx-auto shadow-none">
+                          <span>RASPI</span>
+                          <ArrowRight className="w-2.5 h-2.5 text-emerald-500 shrink-0" />
+                          <span>LORA 1</span>
+                          <ArrowRight className="w-2.5 h-2.5 text-emerald-500 shrink-0" />
+                          <span className="text-[#2D365E]">GATEWAY</span>
+                        </div>
+                      </td>
+
+                      {/* DGA GASES (PPM) */}
+                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.hydrogen_h2 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
+                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.carbon_monoxide_co ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
+                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.ammonia_nh3 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
+                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.methane_ch4 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
+                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.propane_c3h8 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
+                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.butane_c4h10 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
+                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.ethylene_c2h4 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
+                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.acetylene_c2h2 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
+                      <td className="p-3.5 text-center text-[#2D365E] font-mono border-r border-gray-100">{log.ethane_c2h6 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
+
+                      {/* ENVIRONMENT & HEALTH */}
+                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.temperature_c ?? 0}°C</td>
+                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.humidity_pct ?? 0}%</td>
+                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.oil_color_pct ?? 0}%</td>
+                      <td className="p-3.5 text-center text-[#2D365E] font-mono">
                         {log.water_level_actual !== undefined ? log.water_level_actual.toFixed(2) : '0.00'} cm
                       </td>
-                      <td className="p-4 text-center text-gray-400 font-mono uppercase">{log.safety_float || 'OFF'}</td>
+                      <td className="p-3.5 text-center border-r border-gray-100">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                          log.safety_float === 'ON' 
+                            ? 'bg-amber-100 text-amber-700 border border-amber-300' 
+                            : 'bg-slate-100 text-slate-500 border border-slate-200'
+                        }`}>
+                          {log.safety_float || 'OFF'}
+                        </span>
+                      </td>
                       
                       {/* LORA NETWORK METRICS COLUMNS */}
-                      <td className="p-4 text-center font-mono text-indigo-600 bg-indigo-50/20">{log.latency.toFixed(0)} ms</td>
-                      <td className="p-4 text-center font-mono text-blue-600 bg-blue-50/20">{log.rssi !== 0 ? `${log.rssi} dBm` : '--'}</td>
-                      <td className="p-4 text-center font-mono text-cyan-600 bg-cyan-50/20">{log.snr.toFixed(1)} dB</td>
-                      <td className="p-4 text-center font-mono text-emerald-600 bg-emerald-50/20">{log.throughput.toFixed(2)}</td>
+                      <td className="p-3.5 text-center font-mono text-indigo-700 bg-indigo-50/30">{log.latency.toFixed(0)} ms</td>
+                      <td className="p-3.5 text-center font-mono text-blue-700 bg-blue-50/30">{log.rssi !== 0 ? `${log.rssi} dBm` : '--'}</td>
+                      <td className="p-3.5 text-center font-mono text-cyan-700 bg-cyan-50/30">{log.snr.toFixed(1)} dB</td>
+                      <td className="p-3.5 text-center font-mono text-emerald-700 bg-emerald-50/30 border-r border-gray-100">{log.throughput.toFixed(2)} bps</td>
 
-                      <td className="p-4 text-center pr-6 whitespace-nowrap">
+                      {/* ACTION BUTTON */}
+                      <td className="p-3.5 text-center pr-6 whitespace-nowrap">
                         <button 
                           onClick={() => handleDeleteLog(log.id)}
-                          className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-700 transition-colors shadow-sm"
+                          className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-700 transition-colors shadow-sm"
                           title="Delete this row"
                         >
                           <Trash2 size={14} />
@@ -594,7 +648,7 @@ export default function ReportsPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={23} className="p-20 text-center font-black text-gray-300 text-lg tracking-widest">
+                    <td colSpan={24} className="p-20 text-center font-black text-gray-300 text-lg tracking-widest">
                       NO DATA AVAILABLE FOR THIS MONTH
                     </td>
                   </tr>

@@ -14,11 +14,11 @@ const CustomTooltip = ({ active, payload }: any) => {
       <div className="bg-white p-4 rounded-2xl shadow-2xl border border-gray-100 min-w-[200px]">
         <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">{fullDate}</p>
         <div className="flex justify-between items-center mb-1">
-          <span className="text-xs font-bold text-gray-500 uppercase">Waktu</span>
+          <span className="text-xs font-bold text-gray-500 uppercase">Timestamp</span>
           <span className="text-sm font-black text-[#2D365E]">{fullTime}</span>
         </div>
         <div className="flex justify-between items-end border-t border-gray-100 pt-2 mt-2">
-          <span className="text-xs font-bold text-gray-500 uppercase">Konsentrasi</span>
+          <span className="text-xs font-bold text-gray-500 uppercase">Concentration</span>
           <span className="text-xl font-black text-[#2D365E]">{value.toFixed(2)} ppm</span>
         </div>
       </div>
@@ -33,7 +33,7 @@ export default function GasQualityPage() {
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [selectedGas, setSelectedGas] = useState<string>('methane_ch4');
   const [loading, setLoading] = useState(true);
-  const [duval, setDuval] = useState<any>({ id: 'NONE', label: 'TIDAK ADA DATA', ch4p: 0, c2h4p: 0, c2h2p: 0 });
+  const [duval, setDuval] = useState<any>({ id: 'NONE', label: 'NO DATA AVAILABLE', ch4p: 0, c2h4p: 0, c2h2p: 0 });
 
   const gasOptions = [
     { key: 'hydrogen_h2', label: 'Hydrogen (H2)' },
@@ -105,8 +105,8 @@ export default function GasQualityPage() {
           return {
             displayX: timeRange === '24h' 
               ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-              : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
-            fullDate: d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+              : d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
+            fullDate: d.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
             fullTime: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
             value: item[selectedGas] || 0
           };
@@ -116,7 +116,7 @@ export default function GasQualityPage() {
     } else {
       setRadarData([]); 
       setHistoryData([]);
-      setDuval({ id: 'NONE', label: 'TIDAK ADA DATA', ch4p: 0, c2h4p: 0, c2h2p: 0 });
+      setDuval({ id: 'NONE', label: 'NO DATA AVAILABLE', ch4p: 0, c2h4p: 0, c2h2p: 0 });
     }
     setLoading(false);
   };
@@ -127,7 +127,7 @@ export default function GasQualityPage() {
   const runDiagnosis = (ch4: number, c2h4: number, c2h2: number) => {
     const total = ch4 + c2h4 + c2h2;
     if (total === 0) {
-      setDuval({ id: 'NONE', label: 'TIDAK ADA DATA', ch4p: 0, c2h4p: 0, c2h2p: 0 });
+      setDuval({ id: 'NONE', label: 'NO DATA AVAILABLE', ch4p: 0, c2h4p: 0, c2h2p: 0 });
       return;
     }
     const ch4p = (ch4 / total) * 100;
@@ -183,7 +183,7 @@ export default function GasQualityPage() {
         
         {/* RADAR COMPOSITION CARD */}
         <div className="lg:col-span-6 bg-white rounded-[50px] p-10 shadow-2xl min-h-[600px] flex flex-col relative text-[#2D365E]">
-          <h2 className="text-2xl font-black mb-8 border-b pb-4 uppercase tracking-tighter">Komposisi Rata-Rata Gas</h2>
+          <h2 className="text-2xl font-black mb-8 border-b pb-4 uppercase tracking-tighter">Average Gas Composition</h2>
           <div className="flex-grow flex items-center justify-center">
             {loading ? (
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2D365E]"></div>
@@ -193,19 +193,19 @@ export default function GasQualityPage() {
                   <PolarGrid stroke="#E1E6E4" />
                   <PolarAngleAxis dataKey="subject" tick={{ fill: '#2D365E', fontWeight: 'bold', fontSize: 13 }} />
                   <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                  <RadarRecharts name="Konsentrasi" dataKey="value" stroke="#2D365E" strokeWidth={3} fill="#2D365E" fillOpacity={0.4} />
-                  <RechartsTooltip formatter={(value: any) => [`${Number(value).toFixed(2)} ppm`, 'Konsentrasi']} />
+                  <RadarRecharts name="Concentration" dataKey="value" stroke="#2D365E" strokeWidth={3} fill="#2D365E" fillOpacity={0.4} />
+                  <RechartsTooltip formatter={(value: any) => [`${Number(value).toFixed(2)} ppm`, 'Concentration']} />
                 </RadarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="text-center font-black opacity-20 uppercase tracking-[0.3em]">Tidak Ada Data</div>
+              <div className="text-center font-black opacity-20 uppercase tracking-[0.3em]">No Data Available</div>
             )}
           </div>
         </div>
 
         {/* DUVAL TRIANGLE CARD */}
         <div className="lg:col-span-6 bg-[#2D365E] rounded-[50px] p-10 shadow-2xl text-white flex flex-col border border-white/5 relative min-h-[600px]">
-          <h2 className="text-2xl font-black mb-6 uppercase text-center tracking-tighter">Analisis Segitiga Duval</h2>
+          <h2 className="text-2xl font-black mb-6 uppercase text-center tracking-tighter">Duval Triangle Analysis</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 flex-grow items-center">
             <div className="md:col-span-6 relative w-full aspect-square bg-black/10 rounded-[35px] border border-white/5 flex items-center justify-center p-2">
@@ -228,11 +228,11 @@ export default function GasQualityPage() {
               </div>
 
               <div className="bg-white/10 p-5 rounded-[30px] border border-white/20 text-center shadow-[inset_0_0_20px_rgba(255,255,255,0.05)]">
-                <p className="text-[9px] font-black uppercase text-white/40 tracking-[0.2em] mb-2">Status Diagnosis</p>
+                <p className="text-[9px] font-black uppercase text-white/40 tracking-[0.2em] mb-2">Diagnostic Status</p>
                 <div className="flex flex-col items-center gap-2">
                   {duval.id !== 'NONE' && (
                     <span className="bg-[#ff4d4d] text-white px-4 py-1 rounded-lg text-xs font-black shadow-[0_0_12px_rgba(255,77,77,0.4)]">
-                      ZONA {duval.id}
+                      ZONE {duval.id}
                     </span>
                   )}
                   <h3 className="text-base font-black uppercase text-white tracking-tight leading-tight">
@@ -259,7 +259,7 @@ export default function GasQualityPage() {
       <div className="bg-white rounded-[50px] p-10 shadow-2xl flex flex-col h-[550px] text-[#2D365E]">
         <div className="flex justify-between items-center mb-8 border-b pb-4">
           <h2 className="text-2xl font-black uppercase tracking-tighter">
-            Tren Gas - <span className="text-[#2D365E]">{getActiveGasLabel()}</span>
+            Gas Trend - <span className="text-[#2D365E]">{getActiveGasLabel()}</span>
           </h2>
           <select 
             value={selectedGas} 
@@ -292,7 +292,7 @@ export default function GasQualityPage() {
               </AreaChart>
             </ResponsiveContainer>
           ) : !loading && (
-            <div className="flex items-center justify-center h-full font-black opacity-20 uppercase tracking-[0.3em]">Tidak Ada Data</div>
+            <div className="flex items-center justify-center h-full font-black opacity-20 uppercase tracking-[0.3em]">No Data Available</div>
           )}
         </div>
       </div>

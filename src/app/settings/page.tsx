@@ -26,11 +26,11 @@ export default function SettingsPage() {
         .single();
 
       if (error) {
-        setErrorMessage("Data konfigurasi tidak ditemukan di database.");
+        setErrorMessage("Configuration data not found in the database.");
       } else if (data) {
         const fetchedValue = data.value;
 
-        // Validasi default parameter thresholds agar tidak crash
+        // Default parameter thresholds validation to prevent crashes
         if (!fetchedValue.temp) {
           fetchedValue.temp = { warn: 80, crit: 120, displayMode: 'body' };
         }
@@ -57,7 +57,7 @@ export default function SettingsPage() {
         setOriginalConfig(JSON.stringify(fetchedValue));
       }
     } catch (e) {
-      setErrorMessage("Gagal terhubung ke database Supabase.");
+      setErrorMessage("Failed to connect to Supabase database.");
     } finally {
       setLoading(false);
     }
@@ -72,9 +72,9 @@ export default function SettingsPage() {
 
       if (upsertError) throw upsertError;
       setOriginalConfig(JSON.stringify(config));
-      alert('Konfigurasi threshold berhasil disimpan!');
+      alert('Threshold configuration successfully saved!');
     } catch (err: any) {
-      alert('Gagal menyimpan konfigurasi: ' + err.message);
+      alert('Failed to save configuration: ' + err.message);
     } finally {
       setSaving(false);
     }
@@ -86,7 +86,7 @@ export default function SettingsPage() {
     <div className="flex items-center justify-center min-h-screen bg-[#F4F7FE]">
        <div className="flex flex-col items-center gap-4 text-[#2D365E]">
          <RefreshCw className="animate-spin" size={40} />
-         <p className="font-black uppercase tracking-widest text-sm">Memuat Konfigurasi...</p>
+         <p className="font-black uppercase tracking-widest text-sm">Loading Configuration...</p>
        </div>
     </div>
   );
@@ -95,10 +95,10 @@ export default function SettingsPage() {
     <div className="flex items-center justify-center min-h-screen bg-[#F4F7FE] p-10">
        <div className="bg-white p-10 rounded-[40px] shadow-2xl border-2 border-red-100 flex flex-col items-center text-center max-w-lg">
          <XCircle className="text-red-500 mb-6" size={64} />
-         <h2 className="text-2xl font-black uppercase mb-4 text-[#2D365E]">Error Konfigurasi</h2>
+         <h2 className="text-2xl font-black uppercase mb-4 text-[#2D365E]">Configuration Error</h2>
          <p className="text-gray-500 font-bold leading-relaxed mb-8">{errorMessage}</p>
          <button onClick={fetchSettings} className="bg-[#2D365E] text-white px-8 py-3 rounded-2xl font-black uppercase tracking-widest text-sm active:scale-95 transition-all">
-           Coba Lagi
+           Retry
          </button>
        </div>
     </div>
@@ -109,7 +109,7 @@ export default function SettingsPage() {
       
       {/* HEADER BAR */}
       <div className="flex justify-between items-center mb-10">
-        <h1 className="text-4xl font-black uppercase tracking-tight leading-none text-[#2D365E]">Pengaturan Sistem</h1>
+        <h1 className="text-4xl font-black uppercase tracking-tight leading-none text-[#2D365E]">System Settings</h1>
         <button 
           onClick={handleSave}
           disabled={saving || !isDirty}
@@ -120,17 +120,17 @@ export default function SettingsPage() {
           }`}
         >
           {saving ? <RefreshCw className="animate-spin" size={20} /> : <Save size={20} />}
-          {saving ? 'MENYIMPAN...' : 'SIMPAN PERUBAHAN'}
+          {saving ? 'SAVING...' : 'SAVE CHANGES'}
         </button>
       </div>
 
       <div className="space-y-12">
         
-        {/* PANEL 1: THRESHOLD SENSOR GAS */}
+        {/* PANEL 1: GAS SENSOR THRESHOLDS */}
         <div className="bg-white rounded-[45px] p-10 shadow-2xl border border-gray-100">
           <div className="flex items-center gap-3 mb-8 border-b pb-6">
             <Sliders className="text-[#2D365E]" size={28} />
-            <h2 className="text-2xl font-black uppercase tracking-tighter">Threshold Sensor Gas</h2>
+            <h2 className="text-2xl font-black uppercase tracking-tighter">Gas Sensor Thresholds</h2>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -141,7 +141,7 @@ export default function SettingsPage() {
                 <h4 className="font-black text-lg text-[#2D365E]">Carbon Monoxide (CO)</h4>
               </div>
               <div className="mt-4">
-                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Batas Alarm (PPM)</label>
+                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Alarm Limit (PPM)</label>
                 <input type="number" value={config.gasThresholds.CO} onChange={(e) => setConfig({...config, gasThresholds: { ...config.gasThresholds, CO: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-orange-200 outline-none" />
               </div>
             </div>
@@ -153,7 +153,7 @@ export default function SettingsPage() {
                 <h4 className="font-black text-lg text-[#2D365E]">Hydrogen (H2)</h4>
               </div>
               <div className="mt-4">
-                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Batas Alarm (PPM)</label>
+                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Alarm Limit (PPM)</label>
                 <input type="number" value={config.gasThresholds.H2} onChange={(e) => setConfig({...config, gasThresholds: { ...config.gasThresholds, H2: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-orange-200 outline-none" />
               </div>
             </div>
@@ -165,7 +165,7 @@ export default function SettingsPage() {
                 <h4 className="font-black text-lg text-[#2D365E]">Methane (CH4)</h4>
               </div>
               <div className="mt-4">
-                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Batas Alarm (PPM)</label>
+                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Alarm Limit (PPM)</label>
                 <input type="number" value={config.gasThresholds.CH4} onChange={(e) => setConfig({...config, gasThresholds: { ...config.gasThresholds, CH4: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-orange-200 outline-none" />
               </div>
             </div>
@@ -177,7 +177,7 @@ export default function SettingsPage() {
                 <h4 className="font-black text-lg text-[#2D365E]">Ethane (C2H6)</h4>
               </div>
               <div className="mt-4">
-                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Batas Alarm (PPM)</label>
+                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Alarm Limit (PPM)</label>
                 <input type="number" value={config.gasThresholds.ETH} onChange={(e) => setConfig({...config, gasThresholds: { ...config.gasThresholds, ETH: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-orange-200 outline-none" />
               </div>
             </div>
@@ -189,7 +189,7 @@ export default function SettingsPage() {
                 <h4 className="font-black text-lg text-[#2D365E]">Acetylene (C2H2)</h4>
               </div>
               <div className="mt-4">
-                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Batas Alarm (PPM)</label>
+                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Alarm Limit (PPM)</label>
                 <input type="number" value={config.gasThresholds.C2H2} onChange={(e) => setConfig({...config, gasThresholds: { ...config.gasThresholds, C2H2: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-orange-200 outline-none" />
               </div>
             </div>
@@ -201,7 +201,7 @@ export default function SettingsPage() {
                 <h4 className="font-black text-lg text-[#2D365E]">Ethylene (C2H4)</h4>
               </div>
               <div className="mt-4">
-                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Batas Alarm (PPM)</label>
+                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Alarm Limit (PPM)</label>
                 <input type="number" value={config.gasThresholds.C2H4} onChange={(e) => setConfig({...config, gasThresholds: { ...config.gasThresholds, C2H4: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-orange-200 outline-none" />
               </div>
             </div>
@@ -213,46 +213,46 @@ export default function SettingsPage() {
                 <h4 className="font-black text-lg text-[#2D365E]">Ammonia (NH3)</h4>
               </div>
               <div className="mt-4">
-                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Batas Alarm (PPM)</label>
+                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Alarm Limit (PPM)</label>
                 <input type="number" value={config.gasThresholds.NH3} onChange={(e) => setConfig({...config, gasThresholds: { ...config.gasThresholds, NH3: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-orange-200 outline-none" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* PANEL 2: THRESHOLD SUHU, KELEMBAPAN & MINYAK */}
+        {/* PANEL 2: TEMPERATURE, HUMIDITY & OIL THRESHOLDS */}
         <div className="bg-white rounded-[45px] p-10 shadow-2xl border border-gray-100">
           <div className="flex items-center gap-3 mb-8 border-b pb-6">
             <Thermometer className="text-[#2D365E]" size={28} />
-            <h2 className="text-2xl font-black uppercase tracking-tighter">Threshold Suhu, Kelembapan & Minyak</h2>
+            <h2 className="text-2xl font-black uppercase tracking-tighter">Temperature, Humidity & Oil Thresholds</h2>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             
-            {/* CARD SUHU */}
+            {/* CARD TEMPERATURE */}
             <div className="p-6 bg-[#F4F7FE] rounded-[35px] border border-gray-200/50 flex flex-col justify-between">
               <div>
                 <p className="font-black text-sm uppercase tracking-wider text-[#2D365E] border-b pb-2 mb-4 flex items-center gap-2">
-                  <Database size={14} className="text-gray-400" /> Alert Suhu
+                  <Database size={14} className="text-gray-400" /> Temperature Alert
                 </p>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-[10px] font-black text-indigo-600 uppercase block mb-1">Mode Sensor Suhu</label>
+                    <label className="text-[10px] font-black text-indigo-600 uppercase block mb-1">Temperature Sensor Mode</label>
                     <select
                       value={config.temp.displayMode || 'body'}
                       onChange={(e) => setConfig({...config, temp: { ...config.temp, displayMode: e.target.value }})}
                       className="w-full bg-white rounded-xl p-3 font-black text-xs text-indigo-600 border border-indigo-200 outline-none cursor-pointer"
                     >
-                      <option value="body">Suhu Bodi Trafo</option>
-                      <option value="oil">Suhu Minyak Trafo</option>
+                      <option value="body">Transformer Body Temperature</option>
+                      <option value="oil">Transformer Oil Temperature</option>
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Batas Waspada (°C)</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Caution Limit (°C)</label>
                     <input type="number" value={config.temp.warn} onChange={(e) => setConfig({...config, temp: { ...config.temp, warn: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-gray-200 outline-none" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Batas Kritis (°C)</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Critical Limit (°C)</label>
                     <input type="number" value={config.temp.crit} onChange={(e) => setConfig({...config, temp: { ...config.temp, crit: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-gray-200 outline-none" />
                   </div>
                 </div>
@@ -263,34 +263,34 @@ export default function SettingsPage() {
             <div className="p-6 bg-[#F4F7FE] rounded-[35px] border border-gray-200/50 flex flex-col justify-between">
               <div>
                 <p className="font-black text-sm uppercase tracking-wider text-[#2D365E] border-b pb-2 mb-4 flex items-center gap-2">
-                  <Wind size={14} className="text-gray-400" /> Alert Kelembapan
+                  <Wind size={14} className="text-gray-400" /> Humidity Alert
                 </p>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Batas Kering (%)</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Dry Limit (%)</label>
                     <input type="number" value={config.humidity.dry} onChange={(e) => setConfig({...config, humidity: { ...config.humidity, dry: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-gray-200 outline-none" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Batas Lembap (%)</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Wet Limit (%)</label>
                     <input type="number" value={config.humidity.wet} onChange={(e) => setConfig({...config, humidity: { ...config.humidity, wet: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-gray-200 outline-none" />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* CARD WARNA MINYAK */}
+            {/* CARD OIL COLOR */}
             <div className="p-6 bg-[#F4F7FE] rounded-[35px] border border-gray-200/50 flex flex-col justify-between">
               <div>
                 <p className="font-black text-sm uppercase tracking-wider text-[#2D365E] border-b pb-2 mb-4 flex items-center gap-2">
-                  <Droplets size={14} className="text-gray-400" /> Alert Warna Minyak
+                  <Droplets size={14} className="text-gray-400" /> Oil Color Alert
                 </p>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Batas Waspada (%)</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Caution Limit (%)</label>
                     <input type="number" value={config.oil.warn} onChange={(e) => setConfig({...config, oil: { ...config.oil, warn: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-gray-200 outline-none" />
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Batas Kritis (%)</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Critical Limit (%)</label>
                     <input type="number" value={config.oil.crit} onChange={(e) => setConfig({...config, oil: { ...config.oil, crit: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-gray-200 outline-none" />
                   </div>
                 </div>
@@ -300,11 +300,11 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* PANEL 3: LEVEL AIR */}
+        {/* PANEL 3: WATER LEVEL THRESHOLDS */}
         <div className="bg-white rounded-[45px] p-10 shadow-2xl border border-gray-100">
           <div className="flex items-center gap-3 mb-8 border-b pb-6">
             <ShieldAlert className="text-[#2D365E]" size={28} />
-            <h2 className="text-2xl font-black uppercase tracking-tighter">Threshold Level Air</h2>
+            <h2 className="text-2xl font-black uppercase tracking-tighter">Water Level Thresholds</h2>
           </div>
           <div className="p-8 bg-[#F4F7FE] rounded-[35px] border border-gray-200/50">
             <p className="font-black text-xs uppercase tracking-widest text-[#2D365E] mb-6 flex items-center gap-2">
@@ -312,15 +312,15 @@ export default function SettingsPage() {
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1.5">Baseline Tinggi Sensor (cm)</label>
+                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1.5">Sensor Baseline Height (cm)</label>
                 <input type="number" value={config.flood.groundDistance} onChange={(e) => setConfig({...config, flood: { ...config.flood, groundDistance: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-black text-sm text-[#2D365E] border border-gray-200 outline-none" />
               </div>
               <div>
-                <label className="block text-[10px] font-black text-orange-500 uppercase mb-1.5">Batas Waspada (cm)</label>
+                <label className="block text-[10px] font-black text-orange-500 uppercase mb-1.5">Caution Limit (cm)</label>
                 <input type="number" value={config.flood.warnLevel} onChange={(e) => setConfig({...config, flood: { ...config.flood, warnLevel: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-black text-sm text-[#2D365E] border border-orange-200 outline-none" />
               </div>
               <div>
-                <label className="block text-[10px] font-black text-rose-500 uppercase mb-1.5">Batas Bahaya (cm)</label>
+                <label className="block text-[10px] font-black text-rose-500 uppercase mb-1.5">Danger Limit (cm)</label>
                 <input type="number" value={config.flood.critLevel} onChange={(e) => setConfig({...config, flood: { ...config.flood, critLevel: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-black text-sm text-[#2D365E] border border-rose-200 outline-none" />
               </div>
             </div>

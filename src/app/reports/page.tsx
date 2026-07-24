@@ -58,11 +58,32 @@ export default function ReportsPage() {
       .single();
     if (config) setSettings(config.value);
 
-    const { data } = await supabase.from('sensor_logs').select('created_at');
+    // 🌟 UNLIMITED ROW FETCH FOR ARCHIVES: Mengatasi limit 1000 baris agar semua bulan dari awal terekam
+    let allDates: any[] = [];
+    let fromOffset = 0;
+    let keepFetchingDates = true;
+
+    while (keepFetchingDates) {
+      const { data: chunk, error } = await supabase
+        .from('sensor_logs')
+        .select('created_at')
+        .range(fromOffset, fromOffset + 999);
+
+      if (error || !chunk || chunk.length === 0) {
+        keepFetchingDates = false;
+      } else {
+        allDates = [...allDates, ...chunk];
+        if (chunk.length < 1000) {
+          keepFetchingDates = false;
+        } else {
+          fromOffset += 1000;
+        }
+      }
+    }
     
-    if (data && data.length > 0) {
+    if (allDates.length > 0) {
       const structure: Record<number, Set<number>> = {};
-      data.forEach((item: { created_at: string }) => {
+      allDates.forEach((item: { created_at: string }) => {
         const d = new Date(item.created_at);
         const y = d.getFullYear();
         const m = d.getMonth();

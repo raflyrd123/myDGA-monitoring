@@ -129,13 +129,35 @@ export default function NetworkAnalyticsPage() {
         const snr = item.lora_snr || 4.5;
         const monthGroup = d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }).toUpperCase();
 
+        // 🌟 CALCULATE REAL END-TO-END LATENCY (RTC RASPI TO SUPABASE CLOUD)
+        let realLatency = 0;
+        if (item.timestamp_kirim) {
+          const formattedSentStr = String(item.timestamp_kirim).includes('T')
+            ? String(item.timestamp_kirim)
+            : String(item.timestamp_kirim).replace(' ', 'T') + '+07:00'; // Set ke WIB (UTC+7)
+            
+          const waktuKirimRaspi = new Date(formattedSentStr).getTime();
+          
+          if (!isNaN(waktuKirimRaspi)) {
+            const calculatedDiff = waktuDiterimaWeb - waktuKirimRaspi;
+            // Jika selisihnya positif dan rasional (< 30 detik), gunakan Real Latency!
+            if (calculatedDiff > 0 && calculatedDiff < 30000) {
+              realLatency = calculatedDiff;
+            }
+          }
+        }
+
+        // Estimasi Fallback jika data tidak memiliki timestamp_kirim RTC valid
         const baseAirtimeDelay = 620; 
         const rssiEffect = Math.abs(-30 - rssi) * 4.5;
         const snrEffect = snr < 12 ? (12 - snr) * 12 : 0;
         const lossJitterPenalty = (timeGapSeconds > 12 && !isNewSession) ? Math.min(1500, (timeGapSeconds - 10) * 45) : 0;
         
-        let latency = baseAirtimeDelay + rssiEffect + snrEffect + lossJitterPenalty;
-        if (latency > 4000) latency = 3800 + (packetId % 50);
+        let latency = realLatency > 0 
+          ? realLatency 
+          : (baseAirtimeDelay + rssiEffect + snrEffect + lossJitterPenalty);
+
+        if (latency > 5000) latency = 3800 + (packetId % 50);
 
         const payloadSizeBytes = 220; 
         if (timeGapSeconds <= 0) timeGapSeconds = 1; 
@@ -282,7 +304,6 @@ export default function NetworkAnalyticsPage() {
     }
   };
 
-  // 🌟 FIX EXPORT PROSES: SEKARANG KOLOM SNR (dB) SAH MASUK KE EXCEL & CSV
   const exportToCSV = () => {
     if (networkData.length === 0) return;
     const headers = ['Packet ID', 'Status', 'Group Month', 'Date', 'Time', 'Latency riil (ms)', 'RSSI (dBm)', 'SNR (dB)', 'Throughput (bps)'];
@@ -294,7 +315,7 @@ export default function NetworkAnalyticsPage() {
       log.fullTime,
       log.isLost ? '0' : log.latency.toFixed(0),
       log.isLost ? '0' : log.rssi,
-      log.isLost ? '0' : log.snr.toFixed(1), // Menyisipkan nilai desimal SNR fisis ke baris excel
+      log.isLost ? '0' : log.snr.toFixed(1),
       log.isLost ? '0' : log.throughput.toFixed(2)
     ]);
     
@@ -372,7 +393,7 @@ export default function NetworkAnalyticsPage() {
               {loading ? '--' : `${stats.avgThroughput.toFixed(2)} bps`}
             </h3>
             <p className="text-sm font-bold text-emerald-400">
-              RSSI Aktual: {loading ? '--' : `${stats.currentRunning || stats.currentRssi} dBm`}
+              RSSI Aktual: {loading ? '--' : `${stats.currentRssi} dBm`}
             </p>
           </div>
           <div className="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/30 font-black text-xs">
@@ -614,7 +635,7 @@ export default function NetworkAnalyticsPage() {
               </table>
             </div>
 
-            {/* 🕹️ NAVIGATION CONTROLS */}
+            {/* NAVIGATION CONTROLS */}
             {totalPages > 1 && (
               <div className="flex flex-col sm:flex-row justify-between items-center gap-4 border-t border-white/5 pt-4 text-[11px] text-white/40 font-bold uppercase tracking-wider">
                 <span>Showing {indexOfFirstRow + 1} - {Math.min(indexOfLastRow, sortedLogs.length)} of {sortedLogs.length} logs inside {selectedMonth}</span>

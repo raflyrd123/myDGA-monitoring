@@ -5,7 +5,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, 
   ResponsiveContainer, ReferenceLine, Legend, LineChart, Line
 } from 'recharts';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { Activity, Wifi, AlertTriangle, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Download, ArrowUpDown, Calendar, Folder, Hash, XCircle, Zap } from 'lucide-react';
 
 const CustomNetworkTooltip = ({ active, payload, mode }: any) => {

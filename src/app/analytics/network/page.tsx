@@ -6,7 +6,7 @@ import {
   ResponsiveContainer, ReferenceLine, Legend, LineChart, Line
 } from 'recharts';
 import { supabase } from '../../lib/supabase';
-import { Activity, Wifi, AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Download, Hash, XCircle, Signal, ChevronDown, FileSpreadsheet } from 'lucide-react';
+import { Activity, Wifi, AlertTriangle, Signal } from 'lucide-react';
 
 const CustomNetworkTooltip = ({ active, payload, mode }: any) => {
   if (active && payload && payload.length) {
@@ -58,21 +58,7 @@ export default function NetworkAnalyticsPage() {
   
   const [stats, setStats] = useState({ avgLatency: 0, avgRssi: 0, avgSnr: 0 });
 
-  // EXPORT DROPDOWN STATE
-  const [showExportDropdown, setShowExportDropdown] = useState(false);
-  const exportDropdownRef = useRef<HTMLDivElement>(null);
-
   const fetchNetworkMetricsRef = useRef<() => Promise<void>>(async () => {});
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target as Node)) {
-        setShowExportDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const formatWaktuDikirim = (ts: any) => {
     if (!ts || ts === '-') return '-';
@@ -223,96 +209,6 @@ export default function NetworkAnalyticsPage() {
     return () => { supabase.removeChannel(networkChannel); };
   }, [timeRange]);
 
-  // EXPORT CSV HELPER
-  const generateCSV = (dataList: any[], filename: string) => {
-    const headers = ['Packet ID', 'Status', 'Sent Time', 'Received Time', 'End-to-End Latency (ms)', 'RSSI (dBm)', 'SNR (dB)', 'Throughput (bps)'];
-    const rows = dataList.map(log => [
-      `PKT-${String(log.id).padStart(3, '0')}`,
-      'SUCCESS',
-      `"${log.timestamp_kirim}"`,
-      `"${new Date(log.created_at).toLocaleString('en-US')}"`,
-      log.latency.toFixed(0),
-      log.rssi,
-      log.snr.toFixed(1),
-      log.throughput.toFixed(2)
-    ]);
-    
-    const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setShowExportDropdown(false);
-  };
-
-  const exportCurrentRange = () => {
-    if (networkData.length === 0) return;
-    generateCSV(networkData, `LoRa_Network_Data_${timeRange.toUpperCase()}.csv`);
-  };
-
-  const exportAllTimeData = async () => {
-    setLoading(true);
-    let allTimeLogs: any[] = [];
-    let fromOffset = 0;
-    let keepFetching = true;
-
-    while (keepFetching) {
-      const { data: chunk, error } = await supabase
-        .from('sensor_logs')
-        .select('created_at, timestamp_kirim, lora_rssi, lora_snr, packet_id')
-        .order('created_at', { ascending: true })
-        .range(fromOffset, fromOffset + 999);
-
-      if (error || !chunk || chunk.length === 0) {
-        keepFetching = false;
-      } else {
-        allTimeLogs = [...allTimeLogs, ...chunk];
-        if (chunk.length < 1000) {
-          keepFetching = false;
-        } else {
-          fromOffset += 1000;
-        }
-      }
-    }
-
-    const mappedAllTime = allTimeLogs.map((item, idx) => {
-      const d = new Date(item.created_at);
-      const waktuDiterimaCloud = d.getTime(); 
-      const packetId = item.packet_id || idx + 1;
-      let latency = 0;
-      if (item.timestamp_kirim && item.timestamp_kirim !== '-') {
-        const strTs = String(item.timestamp_kirim).trim();
-        const isoStr = strTs.includes('T') ? strTs : strTs.replace(' ', 'T') + '+07:00';
-        const waktuKirimNode = new Date(isoStr).getTime();
-        if (!isNaN(waktuKirimNode) && waktuKirimNode > 0) {
-          const diff = waktuDiterimaCloud - waktuKirimNode;
-          latency = diff > 0 ? diff : 0;
-        }
-      }
-      return {
-        id: packetId,
-        timestamp_kirim: formatWaktuDikirim(item.timestamp_kirim),
-        created_at: item.created_at,
-        latency,
-        rssi: item.lora_rssi || 0,
-        snr: item.lora_snr || 0,
-        throughput: 1760 / 10 
-      };
-    });
-
-    if (mappedAllTime.length > 0) {
-      generateCSV(mappedAllTime, `LoRa_Network_Data_AllTime.csv`);
-    } else {
-      alert("No data available to export.");
-    }
-    setLoading(false);
-  };
-
   const hasSignalData = chartData.some(item => item.rssi !== 0);
 
   return (
@@ -323,47 +219,16 @@ export default function NetworkAnalyticsPage() {
         <h1 className="text-4xl font-black uppercase tracking-tight text-[#2D365E]">
           Analytics - Network QoS
         </h1>
-        <div className="flex items-center gap-4">
-          <div className="flex bg-white rounded-xl p-1 shadow-sm border border-gray-100">
-            {(['24h', '7d', '30d', 'all'] as const).map((range) => (
-              <button 
-                key={range} 
-                onClick={() => setTimeRange(range)} 
-                className={`px-6 py-2 rounded-lg font-bold transition-all ${timeRange === range ? 'bg-[#2D365E] text-white' : 'text-gray-400 hover:text-[#2D365E]'}`}
-              >
-                {range.toUpperCase()}
-              </button>
-            ))}
-          </div>
-
-          {/* EXPORT DROPDOWN */}
-          <div className="relative" ref={exportDropdownRef}>
+        <div className="flex bg-white rounded-xl p-1 shadow-sm border border-gray-100">
+          {(['24h', '7d', '30d', 'all'] as const).map((range) => (
             <button 
-              onClick={() => setShowExportDropdown(!showExportDropdown)}
-              disabled={loading}
-              className="bg-[#2D365E] hover:bg-[#1e2544] text-white px-6 py-3.5 rounded-xl font-black text-xs flex items-center gap-3 shadow-xl transition-all uppercase tracking-wider"
+              key={range} 
+              onClick={() => setTimeRange(range)} 
+              className={`px-6 py-2 rounded-lg font-bold transition-all ${timeRange === range ? 'bg-[#2D365E] text-white' : 'text-gray-400 hover:text-[#2D365E]'}`}
             >
-              <Download size={16} /> Export Data <ChevronDown size={14} className={`transition-transform duration-200 ${showExportDropdown ? 'rotate-180' : ''}`} />
+              {range.toUpperCase()}
             </button>
-            
-            {showExportDropdown && (
-              <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-50">
-                <button 
-                  onClick={exportCurrentRange}
-                  disabled={networkData.length === 0}
-                  className="w-full text-left px-4 py-3 text-xs font-black text-[#2D365E] hover:bg-gray-50 flex items-center gap-2 uppercase disabled:opacity-30"
-                >
-                  <FileSpreadsheet size={14} className="text-cyan-500" /> Export Current Range ({networkData.length} Logs)
-                </button>
-                <button 
-                  onClick={exportAllTimeData}
-                  className="w-full text-left px-4 py-3 text-xs font-black text-emerald-600 hover:bg-gray-50 border-t border-gray-50 flex items-center gap-2 uppercase"
-                >
-                  <Download size={14} className="text-emerald-500" /> Export All Data
-                </button>
-              </div>
-            )}
-          </div>
+          ))}
         </div>
       </div>
 

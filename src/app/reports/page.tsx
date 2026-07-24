@@ -9,16 +9,16 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [availableData, setAvailableData] = useState<{year: number, months: number[]}[]>([]);
   
-  // STATE: Menyimpan array ID Log yang sedang dicentang/dipilih
+  // State manajemen checkbox terpilih untuk hapus massal
   const [selectedIds, setSelectedIds] = useState<any[]>([]);
 
-  // State manajemen navigasi folder bulanan & kontrol tabel
+  // State navigasi folder bulanan & kontrol tabel
   const [viewDetail, setViewDetail] = useState<{year: number, month: number} | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const rowsPerPage = 10; 
 
-  // State manajemen settings kalibrasi untuk pembalik logika air fisis
+  // State settings kalibrasi tinggi air
   const [settings, setSettings] = useState<any>(null);
 
   // State navigasi lompat halaman & dropdown export
@@ -38,10 +38,19 @@ export default function ReportsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Helper pemformat timestamp (Epoch Millis / String Date Time -> Format Rapi)
+  const formatWaktu = (ts: any) => {
+    if (!ts || ts === '-') return '-';
+    if (!isNaN(Number(ts)) && String(ts).length >= 10) {
+      const num = Number(ts);
+      return new Date(num < 1e11 ? num * 1000 : num).toLocaleString('id-ID');
+    }
+    return String(ts);
+  };
+
   const fetchAvailableArchives = async () => {
     setLoading(true);
     
-    // 1. Ambil app_settings duluan untuk data baseline kalibrasi koper DGA
     const { data: config } = await supabase
       .from('app_settings')
       .select('value')
@@ -49,7 +58,6 @@ export default function ReportsPage() {
       .single();
     if (config) setSettings(config.value);
 
-    // 2. Ambil metadata waktu logs
     const { data } = await supabase.from('sensor_logs').select('created_at');
     
     if (data && data.length > 0) {
@@ -91,7 +99,6 @@ export default function ReportsPage() {
     const lastDay = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
     const activeSettings = currentSettings || settings;
 
-    // Chunking Paralel Otomatis untuk Bypass Limit 1000 Supabase
     let allLogs: any[] = [];
     let fromOffset = 0;
     let keepFetching = true;
@@ -117,7 +124,6 @@ export default function ReportsPage() {
       }
     }
 
-    // Koreksi data fisis tinggi air aktual sebelum di-push ke table view state
     const processedLogs = allLogs.map(log => {
       const baseline = activeSettings?.flood?.groundDistance || 100;
       const sensorReading = log.water_level_cm || 0;
@@ -135,7 +141,7 @@ export default function ReportsPage() {
 
   // --- LOGIKA HAPUS DATA ---
   const handleDeleteLog = async (id: any) => {
-    const confirmDelete = window.confirm("Apakah Anda yakin ingin menghapus baris data log ini secara permanen dari database Supabase?");
+    const confirmDelete = window.confirm("Apakah Anda yakin ingin menghapus data log ini dari Supabase?");
     if (!confirmDelete) return;
 
     try {
@@ -144,7 +150,7 @@ export default function ReportsPage() {
 
       setLogs(prev => prev.filter(log => log.id !== id));
       setSelectedIds(prev => prev.filter(selectedId => selectedId !== id));
-      alert("Data log berhasil dihapus!");
+      alert("Data berhasil dihapus!");
     } catch (err: any) {
       alert("Gagal menghapus data: " + err.message);
     }
@@ -153,7 +159,7 @@ export default function ReportsPage() {
   const handleDeleteSelected = async () => {
     if (selectedIds.length === 0) return;
     
-    const confirmDelete = window.confirm(`Apakah Anda yakin ingin menghapus ${selectedIds.length} data yang dipilih secara permanen dari Supabase?`);
+    const confirmDelete = window.confirm(`Apakah Anda yakin ingin menghapus ${selectedIds.length} data terpilih?`);
     if (!confirmDelete) return;
 
     setLoading(true);
@@ -167,9 +173,9 @@ export default function ReportsPage() {
 
       setLogs(prev => prev.filter(log => !selectedIds.includes(log.id)));
       setSelectedIds([]);
-      alert("Seluruh data terpilih berhasil dimusnahkan!");
+      alert("Seluruh data terpilih berhasil dihapus!");
     } catch (err: any) {
-      alert("Gagal eksekusi hapus massal: " + err.message);
+      alert("Gagal menghapus data: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -178,11 +184,8 @@ export default function ReportsPage() {
   const handleDeleteAllCurrentMonth = async () => {
     if (!viewDetail || logs.length === 0) return;
 
-    const confirm1 = window.confirm(`⚠️ DETEKSI AKSI KRITIS!!\nApakah Anda yakin ingin menghapus SELURUH data (${logs.length} baris) pada bulan ${getMonthName(viewDetail.month)} ${viewDetail.year} dari database cloud?`);
+    const confirm1 = window.confirm(`⚠️ KONFIRMASI HAPUS\nApakah Anda yakin ingin menghapus SELURUH data (${logs.length} baris) pada bulan ${getMonthName(viewDetail.month)} ${viewDetail.year}?`);
     if (!confirm1) return;
-
-    const confirm2 = window.confirm("🔥 KONFIRMASI TERAKHIR:\nTindakan ini bersifat destruktif dan tidak bisa dibatalkan. Tekan OK jika Anda benar-benar yakin.");
-    if (!confirm2) return;
 
     setLoading(true);
     try {
@@ -199,10 +202,10 @@ export default function ReportsPage() {
 
       setLogs([]);
       setSelectedIds([]);
-      alert("Database bulan ini berhasil dibersihkan total!");
+      alert("Data bulan ini berhasil dibersihkan!");
       fetchAvailableArchives(); 
     } catch (err: any) {
-      alert("Gagal melakukan pembersihan massal: " + err.message);
+      alert("Gagal membersihkan data: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -218,7 +221,6 @@ export default function ReportsPage() {
     setCurrentPage(1);
   };
 
-  // --- LOGIKA DATA MANIPULATION ---
   const sortedLogs = [...logs].sort((a, b) => {
     const timeA = new Date(a.created_at).getTime();
     const timeB = new Date(b.created_at).getTime();
@@ -230,7 +232,6 @@ export default function ReportsPage() {
   const indexOfFirstRow = indexOfLastRow - rowsPerPage;
   const currentTableRows = sortedLogs.slice(indexOfFirstRow, indexOfLastRow);
 
-  // 🌟 FIX BUG: Menambahkan 'e.' sebelum preventDefault()
   const handlePageJump = (e: React.FormEvent) => {
     e.preventDefault();
     const targetPage = parseInt(pageInput);
@@ -239,16 +240,15 @@ export default function ReportsPage() {
     }
   };
 
-  // 🌟 OPTIMIZED BLOB-BASED CSV EXPORTER
   const generateCSV = (dataList: any[], filename: string) => {
     const headers = [
-      "Waktu Kirim (RTC Alat)", "Waktu Diterima (Cloud)", "Packet ID", "H2 (ppm)", "CO (ppm)", "NH3 (ppm)", "CH4 (ppm)", 
+      "Waktu Dikirim", "Waktu Diterima", "Packet ID", "H2 (ppm)", "CO (ppm)", "NH3 (ppm)", "CH4 (ppm)", 
       "C3H8 (ppm)", "C4H10 (ppm)", "C2H4 (ppm)", "C2H2 (ppm)", "C2H6 (ppm)", 
-      "Temp (C)", "Hum (%)", "Oil Color (%)", "Water Level (cm)", "Safety Float"
+      "Suhu (C)", "Kelembapan (%)", "Warna Minyak (%)", "Tinggi Air (cm)", "Status Pelampung"
     ];
     
     const rows = dataList.map(log => [
-      log.timestamp_kirim ? `"${log.timestamp_kirim}"` : `"${new Date(log.created_at).toLocaleString('id-ID')}"`,
+      `"${formatWaktu(log.timestamp_kirim)}"`,
       `"${new Date(log.created_at).toLocaleString('id-ID')}"`,
       log.packet_id ? `PKT-${String(log.packet_id).padStart(3, '0')}` : '-',
       log.hydrogen_h2 ?? 0, log.carbon_monoxide_co ?? 0, log.ammonia_nh3 ?? 0, log.methane_ch4 ?? 0,
@@ -345,13 +345,13 @@ export default function ReportsPage() {
                 disabled={logs.length === 0}
                 className="w-full text-left px-4 py-3 text-xs font-black text-[#2D365E] hover:bg-gray-50 flex items-center gap-2 uppercase disabled:opacity-30"
               >
-                <FileSpreadsheet size={14} className="text-cyan-500" /> Ekspor Bulan Ini Only ({logs.length} Baris)
+                <FileSpreadsheet size={14} className="text-cyan-500" /> Ekspor Bulan Ini ({logs.length} Data)
               </button>
               <button 
                 onClick={exportAllTimeData}
                 className="w-full text-left px-4 py-3 text-xs font-black text-emerald-600 hover:bg-gray-50 border-t border-gray-50 flex items-center gap-2 uppercase"
               >
-                <Download size={14} className="text-emerald-500" /> Ekspor Semua Data (All-Time)
+                <Download size={14} className="text-emerald-500" /> Ekspor Semua Data
               </button>
             </div>
           )}
@@ -362,8 +362,8 @@ export default function ReportsPage() {
       <div className="space-y-6 mb-10">
         {availableData.length > 0 ? availableData.map(item => (
           <div key={item.year} className="bg-white rounded-[35px] p-6 border border-gray-100 shadow-sm">
-            <div className="text-xs font-black text-gray-300 font-mono mb-4 flex items-center gap-2">
-              <span>FOLDER DIGITAL ARCHIVE TAHUN {item.year}</span>
+            <div className="text-xs font-black text-gray-400 font-mono mb-4 flex items-center gap-2 uppercase">
+              <span>Arsip Tahun {item.year}</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
               {item.months.map(m => {
@@ -394,7 +394,7 @@ export default function ReportsPage() {
           
           <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-50">
             <h2 className="text-sm font-black uppercase tracking-wider text-[#2D365E] flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-cyan-500" /> Menampilkan Data: {getMonthName(viewDetail.month)} {viewDetail.year} ({logs.length} Baris Total)
+              <Calendar className="w-4 h-4 text-cyan-500" /> Data Sensor Bulan {getMonthName(viewDetail.month)} {viewDetail.year} ({logs.length} Data)
             </h2>
             
             <div className="flex items-center gap-3">
@@ -412,7 +412,7 @@ export default function ReportsPage() {
                 disabled={logs.length === 0}
                 className="flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-30 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide transition-all shadow-md"
               >
-                <Trash2 className="w-3.5 h-3.5" /> Hapus Semua Bulan Ini
+                <Trash2 className="w-3.5 h-3.5" /> Hapus Bulan Ini
               </button>
 
               <button 
@@ -426,7 +426,7 @@ export default function ReportsPage() {
 
           {/* TABEL RESPONSIVE COLUMNS */}
           <div className="overflow-x-auto w-full mb-6 rounded-2xl border border-gray-100">
-            <table className="w-full text-left border-collapse min-w-[1800px]">
+            <table className="w-full text-left border-collapse min-w-[1900px]">
               <thead>
                 <tr className="bg-gray-50/70 border-b border-gray-100 text-[10px] font-black uppercase tracking-widest text-gray-400">
                   <th className="p-4 pl-6 text-center whitespace-nowrap w-12">
@@ -444,8 +444,9 @@ export default function ReportsPage() {
                       className="w-4 h-4 rounded border-gray-300 text-[#2D365E] focus:ring-[#2D365E] cursor-pointer"
                     />
                   </th>
-                  <th className="p-4 whitespace-nowrap">Timestamp Log</th>
-                  <th className="p-4 text-center whitespace-nowrap">Pkt ID</th>
+                  <th className="p-4 whitespace-nowrap">Waktu Dikirim</th>
+                  <th className="p-4 whitespace-nowrap">Waktu Diterima</th>
+                  <th className="p-4 text-center whitespace-nowrap">Packet ID</th>
                   <th className="p-4 text-center whitespace-nowrap">H2</th>
                   <th className="p-4 text-center whitespace-nowrap">CO</th>
                   <th className="p-4 text-center whitespace-nowrap">NH3</th>
@@ -455,19 +456,19 @@ export default function ReportsPage() {
                   <th className="p-4 text-center whitespace-nowrap">C2H4</th>
                   <th className="p-4 text-center whitespace-nowrap">C2H2</th>
                   <th className="p-4 text-center whitespace-nowrap">C2H6</th>
-                  <th className="p-4 text-center whitespace-nowrap">Temp</th>
-                  <th className="p-4 text-center whitespace-nowrap">Humidity</th>
-                  <th className="p-4 text-center whitespace-nowrap">Oil Color</th>
-                  <th className="p-4 text-center whitespace-nowrap">Water Lvl</th>
-                  <th className="p-4 text-center whitespace-nowrap">Safety Float</th>
+                  <th className="p-4 text-center whitespace-nowrap">Suhu</th>
+                  <th className="p-4 text-center whitespace-nowrap">Kelembapan</th>
+                  <th className="p-4 text-center whitespace-nowrap">Warna Minyak</th>
+                  <th className="p-4 text-center whitespace-nowrap">Tinggi Air</th>
+                  <th className="p-4 text-center whitespace-nowrap">Pelampung</th>
                   <th className="p-4 text-center pr-6 whitespace-nowrap">Aksi</th>
                 </tr>
               </thead>
               <tbody className="text-xs font-bold divide-y divide-gray-50">
                 {loading ? (
                   <tr>
-                    <td colSpan={18} className="p-20 text-center animate-pulse font-black text-gray-300 text-lg tracking-[0.2em]">
-                      LOADING DATABASE...
+                    <td colSpan={19} className="p-20 text-center animate-pulse font-black text-gray-300 text-lg tracking-widest">
+                      MEMUAT DATA...
                     </td>
                   </tr>
                 ) : currentTableRows.length > 0 ? (
@@ -487,16 +488,17 @@ export default function ReportsPage() {
                           className="w-4 h-4 rounded border-gray-300 text-[#2D365E] focus:ring-[#2D365E] cursor-pointer"
                         />
                       </td>
-                      {/* 🌟 TIMESTAMP DISPLAY: Menampilkan Waktu Kirim RTC + Waktu Diterima Cloud */}
-                      <td className="p-4 font-mono whitespace-nowrap">
-                        <span className="block text-[#2D365E] font-black">
-                          {log.timestamp_kirim || new Date(log.created_at).toLocaleString('id-ID')}
-                        </span>
-                        <span className="block text-[9px] text-gray-400 font-medium mt-0.5">
-                          Cloud: {new Date(log.created_at).toLocaleDateString('id-ID')} {new Date(log.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}
-                        </span>
+                      {/* WAKTU DIKIRIM (RTC ALAT) */}
+                      <td className="p-4 text-[#2D365E] font-mono font-black whitespace-nowrap">
+                        {formatWaktu(log.timestamp_kirim)}
                       </td>
-                      <td className="p-4 text-center text-gray-400 font-mono">#{String(log.packet_id || indexOfFirstRow + i + 1).padStart(3, '0')}</td>
+                      {/* WAKTU DITERIMA (SUPABASE CLOUD) */}
+                      <td className="p-4 text-gray-500 font-mono whitespace-nowrap">
+                        {new Date(log.created_at).toLocaleString('id-ID')}
+                      </td>
+                      <td className="p-4 text-center text-gray-400 font-mono">
+                        #PKT-{String(log.packet_id || indexOfFirstRow + i + 1).padStart(3, '0')}
+                      </td>
                       <td className="p-4 text-center text-[#2D365E] font-mono">{log.hydrogen_h2 ?? 0} ppm</td>
                       <td className="p-4 text-center text-[#2D365E] font-mono">{log.carbon_monoxide_co ?? 0} ppm</td>
                       <td className="p-4 text-center text-[#2D365E] font-mono">{log.ammonia_nh3 ?? 0} ppm</td>
@@ -512,11 +514,12 @@ export default function ReportsPage() {
                       <td className="p-4 text-center text-[#2D365E] font-mono">
                         {log.water_level_actual !== undefined ? log.water_level_actual.toFixed(2) : '0.00'} cm
                       </td>
-                      <td className="p-4 text-center text-gray-400 font-mono uppercase">{log.safety_float || 'NORMAL'}</td>
+                      <td className="p-4 text-center text-gray-400 font-mono uppercase">{log.safety_float || 'OFF'}</td>
                       <td className="p-4 text-center pr-6 whitespace-nowrap">
                         <button 
                           onClick={() => handleDeleteLog(log.id)}
                           className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-700 transition-colors shadow-sm"
+                          title="Hapus baris data ini"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -525,8 +528,8 @@ export default function ReportsPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={18} className="p-20 text-center font-black text-gray-300 text-lg tracking-widest">
-                      BELUM ADA REKORD DATA DI BULAN INI
+                    <td colSpan={19} className="p-20 text-center font-black text-gray-300 text-lg tracking-widest">
+                      TIDAK ADA DATA BULAN INI
                     </td>
                   </tr>
                 )}
@@ -544,7 +547,7 @@ export default function ReportsPage() {
                   <Hash className="w-3.5 h-3.5 text-gray-400 ml-2" />
                   <input 
                     type="number" 
-                    placeholder="Slide ke..." 
+                    placeholder="Slide..." 
                     value={pageInput}
                     onChange={(e) => setPageInput(e.target.value)}
                     min={1}
@@ -579,7 +582,7 @@ export default function ReportsPage() {
       ) : (
         <div className="flex flex-col items-center justify-center p-20 opacity-20 text-center bg-white rounded-[40px] border border-gray-100 shadow-sm">
           <AlertCircle size={60} className="mb-4 text-[#2D365E]" />
-          <p className="text-xl font-black uppercase tracking-[0.2em] text-[#2D365E]">Belum Ada Log Telemetry Masuk</p>
+          <p className="text-xl font-black uppercase tracking-[0.2em] text-[#2D365E]">Belum Ada Data</p>
         </div>
       )}
     </div>

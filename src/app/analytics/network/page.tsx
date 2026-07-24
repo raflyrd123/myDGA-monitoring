@@ -6,7 +6,7 @@ import {
   ResponsiveContainer, ReferenceLine, Legend, LineChart, Line
 } from 'recharts';
 import { supabase } from '../../lib/supabase';
-import { Activity, Wifi, AlertTriangle, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Download, ArrowUpDown, Calendar, Folder, Hash, XCircle, Signal } from 'lucide-react';
+import { Activity, Wifi, AlertTriangle, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Download, ArrowUpDown, Calendar, Folder, Hash, XCircle, Signal, Trash2 } from 'lucide-react';
 
 const CustomNetworkTooltip = ({ active, payload, mode }: any) => {
   if (active && payload && payload.length) {
@@ -58,6 +58,9 @@ export default function NetworkAnalyticsPage() {
   
   const [stats, setStats] = useState({ avgLatency: 0, avgRssi: 0, avgSnr: 0 });
 
+  // STATE MANAJEMEN CHECKBOX & MANAJEMEN DATA HAPUS
+  const [selectedIds, setSelectedIds] = useState<any[]>([]);
+
   const [selectedMonth, setSelectedMonth] = useState<string>(''); 
   const [currentPage, setCurrentPage] = useState(1);
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc'); 
@@ -80,7 +83,7 @@ export default function NetworkAnalyticsPage() {
     
     let query = supabase
       .from('sensor_logs')
-      .select('created_at, timestamp_kirim, lora_rssi, lora_snr, packet_id')
+      .select('id, created_at, timestamp_kirim, lora_rssi, lora_snr, packet_id')
       .order('created_at', { ascending: true });
 
     if (timeRange !== 'all') {
@@ -155,7 +158,6 @@ export default function NetworkAnalyticsPage() {
           }
         }
 
-        // Throughput sederhanas (Payload 220 Bytes = 1760 Bits)
         if (timeGapSeconds <= 0) timeGapSeconds = 1; 
         const throughput = (220 * 8) / timeGapSeconds; 
 
@@ -168,6 +170,7 @@ export default function NetworkAnalyticsPage() {
             for (let lostId = expectedNextId; lostId < packetId; lostId++) {
               allMappedLogs.push({
                 id: lostId,
+                dbId: null,
                 isLost: true, 
                 displayX: '', 
                 fullDate: d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
@@ -199,6 +202,7 @@ export default function NetworkAnalyticsPage() {
 
         allMappedLogs.push({
           id: packetId,
+          dbId: item.id, // Primary Key UUID dari Supabase
           isLost: false,
           displayX: '', 
           fullDate: d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
@@ -263,6 +267,75 @@ export default function NetworkAnalyticsPage() {
     return () => { supabase.removeChannel(networkChannel); };
   }, [timeRange]);
 
+  // --- LOGIKA UTAMA FITUR HAPUS DATA ---
+  const handleDeleteLog = async (dbId: any, packetId: any) => {
+    if (!dbId) return;
+    const confirmDelete = window.confirm(`Apakah Anda yakin ingin menghapus data paket #${packetId} ini secara permanen dari Supabase?`);
+    if (!confirmDelete) return;
+
+    try {
+      const { error } = await supabase.from('sensor_logs').delete().eq('id', dbId);
+      if (error) throw error;
+
+      setNetworkData(prev => prev.filter(log => log.dbId !== dbId));
+      setSelectedIds(prev => prev.filter(id => id !== dbId));
+      alert("Data berhasil dihapus!");
+    } catch (err: any) {
+      alert("Gagal menghapus data: " + err.message);
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedIds.length === 0) return;
+    
+    const confirmDelete = window.confirm(`Apakah Anda yakin ingin menghapus ${selectedIds.length} data terpilih secara permanen dari Supabase?`);
+    if (!confirmDelete) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('sensor_logs').delete().in('id', selectedIds);
+      if (error) throw error;
+
+      setNetworkData(prev => prev.filter(log => !selectedIds.includes(log.dbId)));
+      setSelectedIds([]);
+      alert("Seluruh data terpilih berhasil dihapus!");
+      fetchNetworkMetrics();
+    } catch (err: any) {
+      alert("Gagal menghapus data terpilih: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAllCurrentMonth = async () => {
+    if (!selectedMonth || sortedLogs.length === 0) return;
+
+    const confirm1 = window.confirm(`⚠️ DETEKSI AKSI KRITIS!\nApakah Anda yakin ingin menghapus SELURUH data pada bulan ${selectedMonth} dari database cloud?`);
+    if (!confirm1) return;
+
+    const confirm2 = window.confirm("🔥 Tindakan ini bersifat destruktif dan tidak bisa dibatalkan. Tekan OK jika Anda benar-benar yakin.");
+    if (!confirm2) return;
+
+    setLoading(true);
+    try {
+      const idsToDelete = filteredMonthLogs.map(l => l.dbId).filter(Boolean);
+      
+      if (idsToDelete.length > 0) {
+        const { error } = await supabase.from('sensor_logs').delete().in('id', idsToDelete);
+        if (error) throw error;
+      }
+
+      setNetworkData(prev => prev.filter(log => log.monthGroup !== selectedMonth));
+      setSelectedIds([]);
+      alert(`Data bulan ${selectedMonth} berhasil dibersihkan total!`);
+      fetchNetworkMetrics();
+    } catch (err: any) {
+      alert("Gagal membersihkan data bulan ini: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const toggleSortOrder = () => {
     setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
     setCurrentPage(1);
@@ -320,6 +393,7 @@ export default function NetworkAnalyticsPage() {
   };
 
   const hasSignalData = chartData.some(item => item.rssi !== 0);
+  const currentTableDbIds = currentTableRows.map(r => r.dbId).filter(Boolean);
 
   return (
     <div className="p-10 text-[#2D365E] min-h-screen bg-[#f8fafc]">
@@ -460,7 +534,7 @@ export default function NetworkAnalyticsPage() {
         </div>
       </div>
 
-      {/* CLEAN SECTION HEADER */}
+      {/* CLEAN SECTION HEADER WITH DELETE CONTROLS */}
       <div className="bg-[#2D365E] rounded-[50px] p-10 shadow-2xl border border-white/5 text-white flex flex-col">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/10 pb-6 mb-8">
           <div className="flex items-center gap-3">
@@ -470,13 +544,33 @@ export default function NetworkAnalyticsPage() {
             </div>
           </div>
           
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-wrap">
+            {/* TOMBOL HAPUS TERPILIH */}
+            {selectedIds.length > 0 && (
+              <button 
+                onClick={handleDeleteSelected}
+                className="flex items-center gap-2 bg-rose-500/20 border border-rose-500/40 text-rose-300 hover:bg-rose-500/30 px-4 py-2.5 rounded-xl text-xs font-black tracking-wide uppercase transition-all shadow-sm"
+              >
+                <Trash2 className="w-4 h-4" /> Hapus Terpilih ({selectedIds.length})
+              </button>
+            )}
+
+            {/* TOMBOL HAPUS BULAN INI */}
+            <button 
+              onClick={handleDeleteAllCurrentMonth}
+              disabled={filteredMonthLogs.length === 0}
+              className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-30 text-white px-4 py-2.5 rounded-xl text-xs font-black tracking-wide uppercase transition-all shadow-md"
+            >
+              <Trash2 className="w-4 h-4" /> Hapus Bulan Ini
+            </button>
+
             <button 
               onClick={toggleSortOrder}
               className="flex items-center gap-2 bg-white/10 border border-white/10 px-4 py-2.5 rounded-xl text-xs font-black tracking-wide uppercase hover:bg-white/20 transition-all"
             >
               <ArrowUpDown className="w-4 h-4" /> Urutan: {sortOrder === 'desc' ? 'Terbaru' : 'Terlama'}
             </button>
+
             <button 
               onClick={exportToCSV}
               disabled={networkData.length === 0}
@@ -500,6 +594,7 @@ export default function NetworkAnalyticsPage() {
                     setSelectedMonth(month);
                     setCurrentPage(1); 
                     setPageInput('');
+                    setSelectedIds([]);
                   }}
                   className={`flex flex-col items-center justify-center p-6 rounded-[30px] border transition-all duration-300 ${
                     isActive 
@@ -529,10 +624,24 @@ export default function NetworkAnalyticsPage() {
             </div>
             
             <div className="overflow-x-auto w-full mb-6">
-              <table className="w-full text-left border-collapse min-w-[1700px]">
+              <table className="w-full text-left border-collapse min-w-[1800px]">
                 <thead>
                   <tr className="border-b border-white/10 text-white/40 text-[10px] font-black uppercase tracking-widest">
-                    <th className="pb-3 pl-4">Packet ID</th>
+                    <th className="pb-3 pl-4 text-center w-12">
+                      <input 
+                        type="checkbox"
+                        checked={currentTableDbIds.length > 0 && currentTableDbIds.every(id => selectedIds.includes(id))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds(prev => Array.from(new Set([...prev, ...currentTableDbIds])));
+                          } else {
+                            setSelectedIds(prev => prev.filter(id => !currentTableDbIds.includes(id)));
+                          }
+                        }}
+                        className="w-4 h-4 rounded border-gray-300 text-[#2D365E] focus:ring-[#2D365E] cursor-pointer"
+                      />
+                    </th>
+                    <th className="pb-3">Packet ID</th>
                     <th className="pb-3">Waktu Dikirim</th>
                     <th className="pb-3">Waktu Diterima</th>
                     <th className="pb-3 text-center">Status</th>
@@ -540,7 +649,8 @@ export default function NetworkAnalyticsPage() {
                     <th className="pb-3">End to End Latency</th>
                     <th className="pb-3">RSSI (dBm)</th>
                     <th className="pb-3">SNR (dB)</th>
-                    <th className="pb-3 pr-4">Throughput (bps)</th>
+                    <th className="pb-3">Throughput (bps)</th>
+                    <th className="pb-3 text-center pr-4">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="text-xs font-bold divide-y divide-white/5">
@@ -548,7 +658,10 @@ export default function NetworkAnalyticsPage() {
                     if (log.isLost) {
                       return (
                         <tr key={`lost-${log.id}`} className="bg-rose-500/5 hover:bg-rose-500/10 border-l-4 border-rose-500 transition-colors group">
-                          <td className="py-3.5 pl-4 font-mono font-black text-rose-400">
+                          <td className="py-4 text-center pl-4">
+                            <input type="checkbox" disabled className="w-4 h-4 rounded border-gray-300 opacity-20 cursor-not-allowed" />
+                          </td>
+                          <td className="py-3.5 font-mono font-black text-rose-400">
                             #PKT-{String(log.id).padStart(3, '0')}
                           </td>
                           <td className="py-4 font-mono text-rose-300/60">-</td>
@@ -574,14 +687,29 @@ export default function NetworkAnalyticsPage() {
                           </td>
                           <td className="py-4 text-rose-400/30 font-mono">--</td>
                           <td className="py-4 text-rose-400/30 font-mono">--</td>
-                          <td className="py-4 pr-4 text-rose-400/30 font-mono">0.00</td>
+                          <td className="py-4 font-mono text-rose-400/30">0.00</td>
+                          <td className="py-4 text-center pr-4 font-mono text-rose-400/20">-</td>
                         </tr>
                       );
                     }
 
                     return (
-                      <tr key={`success-${log.id}`} className="hover:bg-white/5 transition-colors group">
-                        <td className="py-3.5 pl-4 font-mono text-white/40 group-hover:text-white">
+                      <tr key={`success-${log.dbId || log.id}`} className={`transition-colors group ${selectedIds.includes(log.dbId) ? 'bg-white/10' : 'hover:bg-white/5'}`}>
+                        <td className="py-4 text-center pl-4">
+                          <input 
+                            type="checkbox"
+                            checked={selectedIds.includes(log.dbId)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedIds(prev => [...prev, log.dbId]);
+                              } else {
+                                setSelectedIds(prev => prev.filter(id => id !== log.dbId));
+                              }
+                            }}
+                            className="w-4 h-4 rounded border-gray-300 text-[#2D365E] focus:ring-[#2D365E] cursor-pointer"
+                          />
+                        </td>
+                        <td className="py-3.5 font-mono text-white/40 group-hover:text-white">
                           #PKT-{String(log.id).padStart(3, '0')}
                         </td>
                         <td className="py-4 font-mono text-cyan-300 font-bold">
@@ -611,8 +739,17 @@ export default function NetworkAnalyticsPage() {
                         <td className="py-4 text-cyan-300 font-mono">
                           {log.snr.toFixed(1)} dB
                         </td>
-                        <td className="py-4 pr-4 text-emerald-400 font-mono">
+                        <td className="py-4 font-mono text-emerald-400">
                           {log.throughput.toFixed(2)}
+                        </td>
+                        <td className="py-4 text-center pr-4">
+                          <button 
+                            onClick={() => handleDeleteLog(log.dbId, log.id)}
+                            className="p-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/30 text-rose-400 transition-all shadow-sm"
+                            title="Hapus baris data ini"
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </td>
                       </tr>
                     );

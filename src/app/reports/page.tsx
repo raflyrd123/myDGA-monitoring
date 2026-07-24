@@ -9,19 +9,19 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [availableData, setAvailableData] = useState<{year: number, months: number[]}[]>([]);
   
-  // State manajemen checkbox terpilih untuk hapus massal
+  // Selected IDs state for bulk deletion
   const [selectedIds, setSelectedIds] = useState<any[]>([]);
 
-  // State navigasi folder bulanan & kontrol tabel
+  // Monthly archive navigation & table controls state
   const [viewDetail, setViewDetail] = useState<{year: number, month: number} | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const rowsPerPage = 10; 
 
-  // State settings kalibrasi tinggi air
+  // Water level calibration settings state
   const [settings, setSettings] = useState<any>(null);
 
-  // State navigasi lompat halaman & dropdown export
+  // Page jump & export dropdown state
   const [pageInput, setPageInput] = useState<string>('');
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -38,12 +38,12 @@ export default function ReportsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Helper pemformat timestamp (Epoch Millis / String Date Time -> Format Rapi)
+  // Timestamp formatting helper (Epoch Millis / String Date Time -> Clean Format)
   const formatWaktu = (ts: any) => {
     if (!ts || ts === '-') return '-';
     if (!isNaN(Number(ts)) && String(ts).length >= 10) {
       const num = Number(ts);
-      return new Date(num < 1e11 ? num * 1000 : num).toLocaleString('id-ID');
+      return new Date(num < 1e11 ? num * 1000 : num).toLocaleString('en-US');
     }
     return String(ts);
   };
@@ -139,9 +139,9 @@ export default function ReportsPage() {
     setLoading(false);
   };
 
-  // --- LOGIKA HAPUS DATA ---
+  // --- DELETE LOGIC ---
   const handleDeleteLog = async (id: any) => {
-    const confirmDelete = window.confirm("Apakah Anda yakin ingin menghapus data log ini dari Supabase?");
+    const confirmDelete = window.confirm("Are you sure you want to delete this log entry from Supabase?");
     if (!confirmDelete) return;
 
     try {
@@ -150,16 +150,16 @@ export default function ReportsPage() {
 
       setLogs(prev => prev.filter(log => log.id !== id));
       setSelectedIds(prev => prev.filter(selectedId => selectedId !== id));
-      alert("Data berhasil dihapus!");
+      alert("Data successfully deleted!");
     } catch (err: any) {
-      alert("Gagal menghapus data: " + err.message);
+      alert("Failed to delete data: " + err.message);
     }
   };
 
   const handleDeleteSelected = async () => {
     if (selectedIds.length === 0) return;
     
-    const confirmDelete = window.confirm(`Apakah Anda yakin ingin menghapus ${selectedIds.length} data terpilih?`);
+    const confirmDelete = window.confirm(`Are you sure you want to delete ${selectedIds.length} selected items?`);
     if (!confirmDelete) return;
 
     setLoading(true);
@@ -173,9 +173,9 @@ export default function ReportsPage() {
 
       setLogs(prev => prev.filter(log => !selectedIds.includes(log.id)));
       setSelectedIds([]);
-      alert("Seluruh data terpilih berhasil dihapus!");
+      alert("All selected items successfully deleted!");
     } catch (err: any) {
-      alert("Gagal menghapus data: " + err.message);
+      alert("Failed to delete data: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -184,7 +184,7 @@ export default function ReportsPage() {
   const handleDeleteAllCurrentMonth = async () => {
     if (!viewDetail || logs.length === 0) return;
 
-    const confirm1 = window.confirm(`⚠️ KONFIRMASI HAPUS\nApakah Anda yakin ingin menghapus SELURUH data (${logs.length} baris) pada bulan ${getMonthName(viewDetail.month)} ${viewDetail.year}?`);
+    const confirm1 = window.confirm(`⚠️ CONFIRM DELETE\nAre you sure you want to delete ALL records (${logs.length} rows) for ${getMonthName(viewDetail.month)} ${viewDetail.year}?`);
     if (!confirm1) return;
 
     setLoading(true);
@@ -202,18 +202,18 @@ export default function ReportsPage() {
 
       setLogs([]);
       setSelectedIds([]);
-      alert("Data bulan ini berhasil dibersihkan!");
+      alert("Data for this month has been successfully cleared!");
       fetchAvailableArchives(); 
     } catch (err: any) {
-      alert("Gagal membersihkan data: " + err.message);
+      alert("Failed to clear data: " + err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const getMonthName = (m: number) => [
-    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 
-    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    'January', 'February', 'March', 'April', 'May', 'June', 
+    'July', 'August', 'September', 'October', 'November', 'December'
   ][m];
 
   const toggleSortOrder = () => {
@@ -242,14 +242,14 @@ export default function ReportsPage() {
 
   const generateCSV = (dataList: any[], filename: string) => {
     const headers = [
-      "Waktu Dikirim", "Waktu Diterima", "Packet ID", "H2 (ppm)", "CO (ppm)", "NH3 (ppm)", "CH4 (ppm)", 
+      "Sent Time", "Received Time", "Packet ID", "H2 (ppm)", "CO (ppm)", "NH3 (ppm)", "CH4 (ppm)", 
       "C3H8 (ppm)", "C4H10 (ppm)", "C2H4 (ppm)", "C2H2 (ppm)", "C2H6 (ppm)", 
-      "Suhu (C)", "Kelembapan (%)", "Warna Minyak (%)", "Tinggi Air (cm)", "Status Pelampung"
+      "Temperature (C)", "Humidity (%)", "Oil Color (%)", "Water Level (cm)", "Float Status"
     ];
     
     const rows = dataList.map(log => [
       `"${formatWaktu(log.timestamp_kirim)}"`,
-      `"${new Date(log.created_at).toLocaleString('id-ID')}"`,
+      `"${new Date(log.created_at).toLocaleString('en-US')}"`,
       log.packet_id ? `PKT-${String(log.packet_id).padStart(3, '0')}` : '-',
       log.hydrogen_h2 ?? 0, log.carbon_monoxide_co ?? 0, log.ammonia_nh3 ?? 0, log.methane_ch4 ?? 0,
       log.propane_c3h8 ?? 0, log.butane_c4h10 ?? 0, log.ethylene_c2h4 ?? 0, log.acetylene_c2h2 ?? 0, log.ethane_c2h6 ?? 0,
@@ -314,7 +314,7 @@ export default function ReportsPage() {
     if (processedMaster.length > 0) {
       generateCSV(processedMaster, `myDGA_Master_Report_AllTime.csv`);
     } else {
-      alert("Tidak ada data di database untuk diekspor.");
+      alert("No data available in the database to export.");
     }
     setLoading(false);
   };
@@ -345,25 +345,25 @@ export default function ReportsPage() {
                 disabled={logs.length === 0}
                 className="w-full text-left px-4 py-3 text-xs font-black text-[#2D365E] hover:bg-gray-50 flex items-center gap-2 uppercase disabled:opacity-30"
               >
-                <FileSpreadsheet size={14} className="text-cyan-500" /> Ekspor Bulan Ini ({logs.length} Data)
+                <FileSpreadsheet size={14} className="text-cyan-500" /> Export Current Month ({logs.length} Data)
               </button>
               <button 
                 onClick={exportAllTimeData}
                 className="w-full text-left px-4 py-3 text-xs font-black text-emerald-600 hover:bg-gray-50 border-t border-gray-50 flex items-center gap-2 uppercase"
               >
-                <Download size={14} className="text-emerald-500" /> Ekspor Semua Data
+                <Download size={14} className="text-emerald-500" /> Export All Data
               </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* GRID FOLDER ARCHIVE BULANAN */}
+      {/* MONTHLY ARCHIVE FOLDERS GRID */}
       <div className="space-y-6 mb-10">
         {availableData.length > 0 ? availableData.map(item => (
           <div key={item.year} className="bg-white rounded-[35px] p-6 border border-gray-100 shadow-sm">
             <div className="text-xs font-black text-gray-400 font-mono mb-4 flex items-center gap-2 uppercase">
-              <span>Arsip Tahun {item.year}</span>
+              <span>Year {item.year} Archive</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
               {item.months.map(m => {
@@ -394,7 +394,7 @@ export default function ReportsPage() {
           
           <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-50">
             <h2 className="text-sm font-black uppercase tracking-wider text-[#2D365E] flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-cyan-500" /> Data Sensor Bulan {getMonthName(viewDetail.month)} {viewDetail.year} ({logs.length} Data)
+              <Calendar className="w-4 h-4 text-cyan-500" /> Sensor Data for {getMonthName(viewDetail.month)} {viewDetail.year} ({logs.length} Entries)
             </h2>
             
             <div className="flex items-center gap-3">
@@ -403,7 +403,7 @@ export default function ReportsPage() {
                   onClick={handleDeleteSelected}
                   className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide hover:bg-red-100 transition-all shadow-sm"
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> Hapus Terpilih ({selectedIds.length})
+                  <Trash2 className="w-3.5 h-3.5" /> Delete Selected ({selectedIds.length})
                 </button>
               )}
               
@@ -412,19 +412,19 @@ export default function ReportsPage() {
                 disabled={logs.length === 0}
                 className="flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-30 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide transition-all shadow-md"
               >
-                <Trash2 className="w-3.5 h-3.5" /> Hapus Bulan Ini
+                <Trash2 className="w-3.5 h-3.5" /> Clear This Month
               </button>
 
               <button 
                 onClick={toggleSortOrder}
                 className="flex items-center gap-2 bg-gray-50 border border-gray-200 text-[#2D365E] px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide hover:bg-gray-100 transition-all"
               >
-                <ArrowUpDown className="w-3.5 h-3.5" /> Urutan: {sortOrder === 'desc' ? 'Terbaru' : 'Terlama'}
+                <ArrowUpDown className="w-3.5 h-3.5" /> Sort: {sortOrder === 'desc' ? 'Latest' : 'Oldest'}
               </button>
             </div>
           </div>
 
-          {/* TABEL RESPONSIVE COLUMNS */}
+          {/* RESPONSIVE TABLE */}
           <div className="overflow-x-auto w-full mb-6 rounded-2xl border border-gray-100">
             <table className="w-full text-left border-collapse min-w-[1900px]">
               <thead>
@@ -444,8 +444,8 @@ export default function ReportsPage() {
                       className="w-4 h-4 rounded border-gray-300 text-[#2D365E] focus:ring-[#2D365E] cursor-pointer"
                     />
                   </th>
-                  <th className="p-4 whitespace-nowrap">Waktu Dikirim</th>
-                  <th className="p-4 whitespace-nowrap">Waktu Diterima</th>
+                  <th className="p-4 whitespace-nowrap">Sent Time</th>
+                  <th className="p-4 whitespace-nowrap">Received Time</th>
                   <th className="p-4 text-center whitespace-nowrap">Packet ID</th>
                   <th className="p-4 text-center whitespace-nowrap">H2</th>
                   <th className="p-4 text-center whitespace-nowrap">CO</th>
@@ -456,19 +456,19 @@ export default function ReportsPage() {
                   <th className="p-4 text-center whitespace-nowrap">C2H4</th>
                   <th className="p-4 text-center whitespace-nowrap">C2H2</th>
                   <th className="p-4 text-center whitespace-nowrap">C2H6</th>
-                  <th className="p-4 text-center whitespace-nowrap">Suhu</th>
-                  <th className="p-4 text-center whitespace-nowrap">Kelembapan</th>
-                  <th className="p-4 text-center whitespace-nowrap">Warna Minyak</th>
-                  <th className="p-4 text-center whitespace-nowrap">Tinggi Air</th>
-                  <th className="p-4 text-center whitespace-nowrap">Pelampung</th>
-                  <th className="p-4 text-center pr-6 whitespace-nowrap">Aksi</th>
+                  <th className="p-4 text-center whitespace-nowrap">Temperature</th>
+                  <th className="p-4 text-center whitespace-nowrap">Humidity</th>
+                  <th className="p-4 text-center whitespace-nowrap">Oil Color</th>
+                  <th className="p-4 text-center whitespace-nowrap">Water Level</th>
+                  <th className="p-4 text-center whitespace-nowrap">Float Status</th>
+                  <th className="p-4 text-center pr-6 whitespace-nowrap">Action</th>
                 </tr>
               </thead>
               <tbody className="text-xs font-bold divide-y divide-gray-50">
                 {loading ? (
                   <tr>
                     <td colSpan={19} className="p-20 text-center animate-pulse font-black text-gray-300 text-lg tracking-widest">
-                      MEMUAT DATA...
+                      LOADING DATA...
                     </td>
                   </tr>
                 ) : currentTableRows.length > 0 ? (
@@ -488,13 +488,11 @@ export default function ReportsPage() {
                           className="w-4 h-4 rounded border-gray-300 text-[#2D365E] focus:ring-[#2D365E] cursor-pointer"
                         />
                       </td>
-                      {/* WAKTU DIKIRIM (RTC ALAT) */}
                       <td className="p-4 text-[#2D365E] font-mono font-black whitespace-nowrap">
                         {formatWaktu(log.timestamp_kirim)}
                       </td>
-                      {/* WAKTU DITERIMA (SUPABASE CLOUD) */}
                       <td className="p-4 text-gray-500 font-mono whitespace-nowrap">
-                        {new Date(log.created_at).toLocaleString('id-ID')}
+                        {new Date(log.created_at).toLocaleString('en-US')}
                       </td>
                       <td className="p-4 text-center text-gray-400 font-mono">
                         #PKT-{String(log.packet_id || indexOfFirstRow + i + 1).padStart(3, '0')}
@@ -519,7 +517,7 @@ export default function ReportsPage() {
                         <button 
                           onClick={() => handleDeleteLog(log.id)}
                           className="p-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-700 transition-colors shadow-sm"
-                          title="Hapus baris data ini"
+                          title="Delete this row"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -529,7 +527,7 @@ export default function ReportsPage() {
                 ) : (
                   <tr>
                     <td colSpan={19} className="p-20 text-center font-black text-gray-300 text-lg tracking-widest">
-                      TIDAK ADA DATA BULAN INI
+                      NO DATA AVAILABLE FOR THIS MONTH
                     </td>
                   </tr>
                 )}
@@ -537,7 +535,7 @@ export default function ReportsPage() {
             </table>
           </div>
 
-          {/* TABLE PAGINATION PANEL CONTROLLER */}
+          {/* TABLE PAGINATION PANEL */}
           {totalPages > 1 && (
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4 border-t border-gray-100 pt-4 text-xs text-gray-400 font-bold uppercase tracking-wider">
               <span>Showing {indexOfFirstRow + 1} - {Math.min(indexOfLastRow, sortedLogs.length)} of {sortedLogs.length} entries</span>
@@ -547,7 +545,7 @@ export default function ReportsPage() {
                   <Hash className="w-3.5 h-3.5 text-gray-400 ml-2" />
                   <input 
                     type="number" 
-                    placeholder="Slide..." 
+                    placeholder="Page..." 
                     value={pageInput}
                     onChange={(e) => setPageInput(e.target.value)}
                     min={1}
@@ -582,7 +580,7 @@ export default function ReportsPage() {
       ) : (
         <div className="flex flex-col items-center justify-center p-20 opacity-20 text-center bg-white rounded-[40px] border border-gray-100 shadow-sm">
           <AlertCircle size={60} className="mb-4 text-[#2D365E]" />
-          <p className="text-xl font-black uppercase tracking-[0.2em] text-[#2D365E]">Belum Ada Data</p>
+          <p className="text-xl font-black uppercase tracking-[0.2em] text-[#2D365E]">No Data Available</p>
         </div>
       )}
     </div>

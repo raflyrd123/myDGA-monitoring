@@ -2,10 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { SensorCard } from './components/SensorCard';
-import { supabase } from './lib/supabase'; // 🌟 JALUR LOKAL ASLI
+import { supabase } from './lib/supabase';
 import Image from 'next/image';
 
-// 🌟 HOISTING GUARD: LegendItem aman di luar scope utama agar bebas dari ReferenceError
 const LegendItem = ({ color, label, isDark = false }: { color: string, label: string, isDark?: boolean }) => (
   <div className="flex items-center gap-2">
     <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: color }}></div>
@@ -14,29 +13,29 @@ const LegendItem = ({ color, label, isDark = false }: { color: string, label: st
 );
 
 export default function DashboardPage() {
-  // --- STATE DATA SENSOR ---
+  // --- SENSOR DATA STATES ---
   const [tempValue, setTempValue] = useState(0);
   const [humidityValue, setHumidityValue] = useState(0);
   const [oilColorValue, setOilColorValue] = useState(0);
   const [floodLevel, setFloodLevel] = useState(0); 
   const [floodText, setFloodText] = useState("0.00");
   
-  // 🌟 REAL TELEMETRY STATE: Membaca status fisis asli dari float switch (ON/OFF)
+  // REAL TELEMETRY STATE
   const [floatStatus, setFloatStatus] = useState("OFF");
 
   const [gasData, setGasData] = useState({
     h2: 0, co: 0, nh3: 0, ch4: 0, c3h8: 0, c4h10: 0, c2h4: 0, c2h2: 0, c2h6: 0
   });
 
-  // --- STATE SETTINGS & ANALYTICS ---
+  // --- SETTINGS & ANALYTICS STATES ---
   const [settings, setSettings] = useState<any>(null);
   const [peakTemp, setPeakTemp] = useState(0);
   const [lowestTemp, setLowestTemp] = useState(0);
   const [avgTemp, setAvgTemp] = useState(0);
 
-  // --- CONFIG DATA MAP SENSOR GAS ---
+  // --- GAS SENSOR CONFIG MAP ---
   const gasConfigs: any = {
-    h2: { title: 'Hidrogen', color: '#00A3E0', icon: 'h2.png', key: 'H2' },
+    h2: { title: 'Hydrogen', color: '#00A3E0', icon: 'h2.png', key: 'H2' },
     co: { title: 'Carbon Monoxide', color: '#475569', icon: 'co.png', key: 'CO' },
     nh3: { title: 'Ammonia', color: '#84CC16', icon: 'nh3.png', key: 'NH3' },
     ch4: { title: 'Methane', color: '#F59E0B', icon: 'ch4.png', key: 'CH4' },
@@ -49,7 +48,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const initializeDashboard = async () => {
-      // 1. Ambil data konfigurasi/thresholds
+      // 1. Fetch configurations/thresholds
       const { data: config } = await supabase
         .from('app_settings')
         .select('value')
@@ -58,14 +57,14 @@ export default function DashboardPage() {
       
       if (config) setSettings(config.value);
 
-      // 2. Ambil data log 24 jam terakhir untuk kalkulasi analitik
+      // 2. Fetch last 24h logs for analytics calculation
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data: pastLogs } = await supabase
         .from('sensor_logs')
         .select('temperature_c')
         .gte('created_at', oneDayAgo);
 
-      // 3. Ambil baris data paling terakhir
+      // 3. Fetch latest telemetry entry
       const { data: latestSensor } = await supabase
         .from('sensor_logs')
         .select('*')
@@ -128,12 +127,10 @@ export default function DashboardPage() {
       const baseline = currentSettings.flood.groundDistance;
       const sensorReading = data.water_level_cm || 0;
       
-      // Logika Pembalik Nilas fisis ultrasonik tanki
       const actualWaterHeightCm = Math.max(0, baseline - sensorReading);
       const calcFloodPct = Math.max(0, Math.min(100, (actualWaterHeightCm / baseline) * 100));
       
       setFloodLevel(calcFloodPct);
-      // 🌟 FIX: Diubah ke .toFixed(2) agar menampilkan minimal 2 digit presisi desibel belakang koma
       setFloodText(actualWaterHeightCm.toFixed(2)); 
     }
 
@@ -178,10 +175,10 @@ export default function DashboardPage() {
   };
 
   const getOilColorLabel = (val: number) => {
-    if (val <= 20) return "Bening (Sangat Baik)";
-    if (val <= 50) return "Mulai Kuning (Degradasi Ringan)";
-    if (val <= 80) return "Keruh (Saturasi Karbon)";
-    return "Hitam (Kontaminasi Berat)";
+    if (val <= 20) return "Clear (Excellent)";
+    if (val <= 50) return "Slightly Yellow (Light Degradation)";
+    if (val <= 80) return "Cloudy (Carbon Saturation)";
+    return "Dark (Severe Contamination)";
   };
 
   if (!settings) return <div className="p-10 font-black uppercase opacity-20 text-[#2D365E]">Syncing Thresholds...</div>;
@@ -355,7 +352,6 @@ export default function DashboardPage() {
         </div>
         <div className="flex items-center justify-between w-full px-12 mb-8 text-[#2D365E]">
           
-          {/* Silinder Indikator Air h-72 */}
           <div className="w-20 h-72 bg-[#E1E6E4] rounded-[32px] p-2 flex flex-col justify-end shadow-inner border-4 border-gray-50/50 relative overflow-hidden shrink-0">
             <div 
               className="w-full transition-all duration-1000 shadow-lg" 
@@ -369,7 +365,6 @@ export default function DashboardPage() {
           
           <div className="flex flex-col items-start ml-8 flex-grow">
             <p className="text-[60px] font-bold tracking-tight" style={{ color: curFlood.color }}>{curFlood.label}</p>
-            {/* 🌟 AKTIF 2 ANGKA DESIMAL: Menampilkan tinggi air fisis riil koma lengkap */}
             <h3 className="text-[110px] font-bold leading-none tracking-tighter text-[#707070]">{floodText} <span className="text-3xl font-black text-gray-300">cm</span></h3>
           </div>
 

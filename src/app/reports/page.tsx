@@ -149,9 +149,27 @@ export default function ReportsPage() {
       const baseline = activeSettings?.flood?.groundDistance || 100;
       const sensorReading = log.water_level_cm || 0;
       const actualWaterHeightCm = Math.max(0, baseline - sensorReading);
+
+      // Latency calculation
+      let latency = 0;
+      if (log.timestamp_kirim && log.timestamp_kirim !== '-') {
+        const strTs = String(log.timestamp_kirim).trim();
+        const isoStr = strTs.includes('T') ? strTs : strTs.replace(' ', 'T') + '+07:00';
+        const sentTime = new Date(isoStr).getTime();
+        const receivedTime = new Date(log.created_at).getTime();
+        if (!isNaN(sentTime) && sentTime > 0) {
+          const diff = receivedTime - sentTime;
+          latency = diff > 0 ? diff : 0;
+        }
+      }
+
       return {
         ...log,
-        water_level_actual: actualWaterHeightCm
+        water_level_actual: actualWaterHeightCm,
+        latency,
+        rssi: log.lora_rssi ?? 0,
+        snr: log.lora_snr ?? 0,
+        throughput: 176.00 // Standard 220 bytes * 8 bits / 10s
       };
     });
 
@@ -263,7 +281,8 @@ export default function ReportsPage() {
     const headers = [
       "Sent Time", "Received Time", "Packet ID", "H2 (ppm)", "CO (ppm)", "NH3 (ppm)", "CH4 (ppm)", 
       "C3H8 (ppm)", "C4H10 (ppm)", "C2H4 (ppm)", "C2H2 (ppm)", "C2H6 (ppm)", 
-      "Temperature (C)", "Humidity (%)", "Oil Color (%)", "Water Level (cm)", "Float Status"
+      "Temperature (C)", "Humidity (%)", "Oil Color (%)", "Water Level (cm)", "Float Status",
+      "Latency (ms)", "RSSI (dBm)", "SNR (dB)", "Throughput (bps)"
     ];
     
     const rows = dataList.map(log => [
@@ -274,7 +293,11 @@ export default function ReportsPage() {
       log.propane_c3h8 ?? 0, log.butane_c4h10 ?? 0, log.ethylene_c2h4 ?? 0, log.acetylene_c2h2 ?? 0, log.ethane_c2h6 ?? 0,
       log.temperature_c ?? 0, log.humidity_pct ?? 0, log.oil_color_pct ?? 0, 
       log.water_level_actual !== undefined ? log.water_level_actual.toFixed(2) : (log.water_level_cm ?? 0), 
-      log.safety_float || '-'
+      log.safety_float || '-',
+      log.latency ? log.latency.toFixed(0) : 0,
+      log.rssi ?? 0,
+      log.snr ? log.snr.toFixed(1) : 0,
+      log.throughput ? log.throughput.toFixed(2) : 0
     ]);
 
     const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
@@ -324,9 +347,24 @@ export default function ReportsPage() {
 
     const processedMaster = masterLogs.map(log => {
       const baseline = settings?.flood?.groundDistance || 100;
+      let latency = 0;
+      if (log.timestamp_kirim && log.timestamp_kirim !== '-') {
+        const strTs = String(log.timestamp_kirim).trim();
+        const isoStr = strTs.includes('T') ? strTs : strTs.replace(' ', 'T') + '+07:00';
+        const sentTime = new Date(isoStr).getTime();
+        const receivedTime = new Date(log.created_at).getTime();
+        if (!isNaN(sentTime) && sentTime > 0) {
+          const diff = receivedTime - sentTime;
+          latency = diff > 0 ? diff : 0;
+        }
+      }
       return {
         ...log,
-        water_level_actual: Math.max(0, baseline - (log.water_level_cm || 0))
+        water_level_actual: Math.max(0, baseline - (log.water_level_cm || 0)),
+        latency,
+        rssi: log.lora_rssi ?? 0,
+        snr: log.lora_snr ?? 0,
+        throughput: 176.00
       };
     });
 
@@ -413,7 +451,7 @@ export default function ReportsPage() {
           
           <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-50">
             <h2 className="text-sm font-black uppercase tracking-wider text-[#2D365E] flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-cyan-500" /> Sensor Data for {getMonthName(viewDetail.month)} {viewDetail.year} ({logs.length} Entries)
+              <Calendar className="w-4 h-4 text-cyan-500" /> Master Data for {getMonthName(viewDetail.month)} {viewDetail.year} ({logs.length} Entries)
             </h2>
             
             <div className="flex items-center gap-3">
@@ -443,9 +481,9 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* RESPONSIVE TABLE */}
+          {/* RESPONSIVE TABLE WITH BOTH SENSOR & NETWORK COLUMNS */}
           <div className="overflow-x-auto w-full mb-6 rounded-2xl border border-gray-100">
-            <table className="w-full text-left border-collapse min-w-[1900px]">
+            <table className="w-full text-left border-collapse min-w-[2300px]">
               <thead>
                 <tr className="bg-gray-50/70 border-b border-gray-100 text-[10px] font-black uppercase tracking-widest text-gray-400">
                   <th className="p-4 pl-6 text-center whitespace-nowrap w-12">
@@ -480,13 +518,17 @@ export default function ReportsPage() {
                   <th className="p-4 text-center whitespace-nowrap">Oil Color</th>
                   <th className="p-4 text-center whitespace-nowrap">Water Level</th>
                   <th className="p-4 text-center whitespace-nowrap">Float Status</th>
+                  <th className="p-4 text-center whitespace-nowrap text-indigo-600 bg-indigo-50/50">Latency (ms)</th>
+                  <th className="p-4 text-center whitespace-nowrap text-blue-600 bg-blue-50/50">RSSI (dBm)</th>
+                  <th className="p-4 text-center whitespace-nowrap text-cyan-600 bg-cyan-50/50">SNR (dB)</th>
+                  <th className="p-4 text-center whitespace-nowrap text-emerald-600 bg-emerald-50/50">Throughput (bps)</th>
                   <th className="p-4 text-center pr-6 whitespace-nowrap">Action</th>
                 </tr>
               </thead>
               <tbody className="text-xs font-bold divide-y divide-gray-50">
                 {loading ? (
                   <tr>
-                    <td colSpan={19} className="p-20 text-center animate-pulse font-black text-gray-300 text-lg tracking-widest">
+                    <td colSpan={23} className="p-20 text-center animate-pulse font-black text-gray-300 text-lg tracking-widest">
                       LOADING DATA...
                     </td>
                   </tr>
@@ -532,6 +574,13 @@ export default function ReportsPage() {
                         {log.water_level_actual !== undefined ? log.water_level_actual.toFixed(2) : '0.00'} cm
                       </td>
                       <td className="p-4 text-center text-gray-400 font-mono uppercase">{log.safety_float || 'OFF'}</td>
+                      
+                      {/* LORA NETWORK METRICS COLUMNS */}
+                      <td className="p-4 text-center font-mono text-indigo-600 bg-indigo-50/20">{log.latency.toFixed(0)} ms</td>
+                      <td className="p-4 text-center font-mono text-blue-600 bg-blue-50/20">{log.rssi !== 0 ? `${log.rssi} dBm` : '--'}</td>
+                      <td className="p-4 text-center font-mono text-cyan-600 bg-cyan-50/20">{log.snr.toFixed(1)} dB</td>
+                      <td className="p-4 text-center font-mono text-emerald-600 bg-emerald-50/20">{log.throughput.toFixed(2)}</td>
+
                       <td className="p-4 text-center pr-6 whitespace-nowrap">
                         <button 
                           onClick={() => handleDeleteLog(log.id)}
@@ -545,7 +594,7 @@ export default function ReportsPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={19} className="p-20 text-center font-black text-gray-300 text-lg tracking-widest">
+                    <td colSpan={23} className="p-20 text-center font-black text-gray-300 text-lg tracking-widest">
                       NO DATA AVAILABLE FOR THIS MONTH
                     </td>
                   </tr>

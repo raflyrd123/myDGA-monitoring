@@ -5,7 +5,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, 
   ResponsiveContainer, ReferenceLine, Legend, LineChart, Line
 } from 'recharts';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../../../lib/supabase';
 import { Activity, Wifi, AlertTriangle, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Download, ArrowUpDown, Calendar, Folder, Hash, XCircle, Zap } from 'lucide-react';
 
 const CustomNetworkTooltip = ({ active, payload, mode }: any) => {
@@ -15,7 +15,7 @@ const CustomNetworkTooltip = ({ active, payload, mode }: any) => {
       <div className="bg-white p-4 rounded-2xl shadow-2xl border border-gray-100 min-w-[220px]">
         <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">{data.fullDate}</p>
         <div className="flex justify-between items-center mb-1">
-          <span className="text-xs font-bold text-gray-500 uppercase">Timestamp</span>
+          <span className="text-xs font-bold text-gray-500 uppercase">Waktu Log</span>
           <span className="text-sm font-black text-[#2D365E]">{data.fullTime}</span>
         </div>
         <div className="border-t border-gray-100 pt-2 mt-2 space-y-1">
@@ -107,61 +107,49 @@ export default function NetworkAnalyticsPage() {
       
       allRawData.forEach((item, idx) => {
         const d = new Date(item.created_at);
-        const waktuDiterimaWeb = d.getTime(); 
+        const waktuDiterimaCloud = d.getTime(); 
         const packetId = item.packet_id || idx + 1;
         
         let isNewSession = false;
         let timeGapSeconds = 10; 
         
         if (lastTimestamp !== null) {
-          const timeGapMinutes = (waktuDiterimaWeb - lastTimestamp) / (1000 * 60);
-          timeGapSeconds = (waktuDiterimaWeb - lastTimestamp) / 1000;
+          const timeGapMinutes = (waktuDiterimaCloud - lastTimestamp) / (1000 * 60);
+          timeGapSeconds = (waktuDiterimaCloud - lastTimestamp) / 1000;
           
           if (timeGapMinutes > 30) { 
             isNewSession = true;
             timeGapSeconds = 10; 
           }
         }
-        lastTimestamp = waktuDiterimaWeb;
+        lastTimestamp = waktuDiterimaCloud;
 
         let rssi = item.lora_rssi || 0;
         if (rssi === 0 || rssi < -130) rssi = -92; 
-        const snr = item.lora_snr || 4.5;
+        const snr = item.lora_snr || 0;
         const monthGroup = d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }).toUpperCase();
 
-        // 🌟 CALCULATE REAL END-TO-END LATENCY (RTC RASPI TO SUPABASE CLOUD)
-        let realLatency = 0;
-        if (item.timestamp_kirim) {
-          const formattedSentStr = String(item.timestamp_kirim).includes('T')
-            ? String(item.timestamp_kirim)
-            : String(item.timestamp_kirim).replace(' ', 'T') + '+07:00'; 
-            
-          const waktuKirimRaspi = new Date(formattedSentStr).getTime();
-          
-          if (!isNaN(waktuKirimRaspi)) {
-            const calculatedDiff = waktuDiterimaWeb - waktuKirimRaspi;
-            if (calculatedDiff > 0 && calculatedDiff < 30000) {
-              realLatency = calculatedDiff;
-            }
+        // 🌟 PERHITUNGAN EKSPLISIT STRING DATETIME (WAKTU DITERIMA - WAKTU DIKIRIM RTC)
+        let latency = 0;
+        if (item.timestamp_kirim && item.timestamp_kirim !== '-') {
+          const strTs = String(item.timestamp_kirim).trim();
+          // Format standar ISO dengan Timezone WIB (+07:00)
+          const isoStr = strTs.includes('T') ? strTs : strTs.replace(' ', 'T') + '+07:00';
+          const waktuKirimNode = new Date(isoStr).getTime();
+
+          if (!isNaN(waktuKirimNode) && waktuKirimNode > 0) {
+            const diff = waktuDiterimaCloud - waktuKirimNode;
+            latency = diff > 0 ? diff : 0; // Selisih waktu nyata murni
           }
         }
 
-        const baseAirtimeDelay = 620; 
-        const rssiEffect = Math.abs(-30 - rssi) * 4.5;
-        const snrEffect = snr < 12 ? (12 - snr) * 12 : 0;
-        const lossJitterPenalty = (timeGapSeconds > 12 && !isNewSession) ? Math.min(1500, (timeGapSeconds - 10) * 45) : 0;
-        
-        let latency = realLatency > 0 
-          ? realLatency 
-          : (baseAirtimeDelay + rssiEffect + snrEffect + lossJitterPenalty);
-
-        if (latency > 5000) latency = 3800 + (packetId % 50);
-
+        // PERHITUNGAN THROUGHPUT (Payload 220 Bytes = 1760 Bits)
         const payloadSizeBytes = 220; 
         if (timeGapSeconds <= 0) timeGapSeconds = 1; 
         const throughput = (payloadSizeBytes * 8) / timeGapSeconds; 
         totalThroughput += throughput;
 
+        // DETEKSI PACKET LOSS
         if (expectedNextId !== null && packetId > expectedNextId && !isNewSession) {
           const gapSize = packetId - expectedNextId;
           
@@ -176,7 +164,7 @@ export default function NetworkAnalyticsPage() {
                 fullTime: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                 timestamp_kirim: '-',
                 created_at: item.created_at,
-                rawDate: new Date(waktuDiterimaWeb - 1000), 
+                rawDate: new Date(waktuDiterimaCloud - 1000), 
                 monthGroup,
                 latency: 0,
                 rssi: 0,
@@ -189,8 +177,10 @@ export default function NetworkAnalyticsPage() {
         }
         
         expectedNextId = packetId + 1;
-        totalLatency += latency;
-        validLatencyCount++;
+        if (latency > 0) {
+          totalLatency += latency;
+          validLatencyCount++;
+        }
 
         allMappedLogs.push({
           id: packetId,
@@ -210,12 +200,11 @@ export default function NetworkAnalyticsPage() {
         });
       });
 
-      const avgLatency = validLatencyCount > 0 ? (totalLatency / validLatencyCount) : 850;
+      const avgLatency = validLatencyCount > 0 ? (totalLatency / validLatencyCount) : 0;
       const avgThroughput = validLatencyCount > 0 ? (totalThroughput / validLatencyCount) : 0;
       const totalSentPackets = allRawData.length + lossCount;
       
       let pdr = totalSentPackets > 0 ? (allRawData.length / totalSentPackets) * 100 : 100;
-      if (pdr < 80) pdr = 96.4; 
 
       const lastElement = allMappedLogs[allMappedLogs.length - 1];
 
@@ -270,10 +259,10 @@ export default function NetworkAnalyticsPage() {
   }, [timeRange]);
 
   const getLatencyStatus = (ms: number) => {
-    if (ms === 0) return { text: 'NO PAYLOAD', color: 'text-gray-400', bg: 'bg-gray-500/10 border-gray-500/20' };
-    if (ms <= 1200) return { text: 'EXCELLENT', color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' };
-    if (ms <= 2200) return { text: 'GOOD', color: 'text-yellow-500', bg: 'bg-yellow-500/10 border-yellow-500/20' };
-    return { text: 'HIGH JITTER', color: 'text-rose-500', bg: 'bg-rose-500/10 border-rose-500/20' };
+    if (ms === 0) return { text: 'N/A', color: 'text-gray-400', bg: 'bg-gray-500/10 border-gray-500/20' };
+    if (ms <= 1200) return { text: 'SANGAT BAIK', color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' };
+    if (ms <= 2200) return { text: 'MODERAT', color: 'text-yellow-500', bg: 'bg-yellow-500/10 border-yellow-500/20' };
+    return { text: 'LATENSI TINGGI', color: 'text-rose-500', bg: 'bg-rose-500/10 border-rose-500/20' };
   };
 
   const toggleSortOrder = () => {
@@ -308,10 +297,10 @@ export default function NetworkAnalyticsPage() {
 
   const exportToCSV = () => {
     if (networkData.length === 0) return;
-    const headers = ['Packet ID', 'Status', 'Timestamp Dibuat (RTC Alat)', 'Timestamp Diterima (Cloud)', 'Latency (ms)', 'RSSI (dBm)', 'SNR (dB)', 'Throughput (bps)'];
+    const headers = ['Identifikasi Paket', 'Status Transmisi', 'Waktu Inisiasi (Edge Node)', 'Waktu Presipitasi (Cloud Server)', 'End-to-End Latency (ms)', 'RSSI (dBm)', 'SNR (dB)', 'Laju Throughput (bps)'];
     const rows = networkData.map(log => [
       `PKT-${String(log.id).padStart(3, '0')}`,
-      log.isLost ? 'FAILED (LOST)' : 'SUCCESS',
+      log.isLost ? 'FAILED (PACKET LOSS)' : 'SUCCESS',
       `"${log.timestamp_kirim}"`,
       `"${new Date(log.created_at).toLocaleString('id-ID')}"`,
       log.isLost ? '0' : log.latency.toFixed(0),
@@ -360,14 +349,14 @@ export default function NetworkAnalyticsPage() {
         <div className="bg-white rounded-[40px] p-8 shadow-xl border border-gray-100/50 flex flex-col justify-between">
           <div>
             <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-              <Activity className="w-4 h-4 text-gray-400" /> Avg Network Latency
+              <Activity className="w-4 h-4 text-gray-400" /> Rata-Rata Latensi Jaringan
             </p>
             <h3 className="text-5xl font-black text-[#2D365E]">
               {loading ? '--' : `${stats.avgLatency.toFixed(0)} ms`}
             </h3>
           </div>
           <span className={`text-[11px] font-black tracking-widest mt-4 uppercase ${getLatencyStatus(stats.avgLatency).color}`}>
-            Link Status: {getLatencyStatus(stats.avgLatency).text}
+            Status Koneksi: {getLatencyStatus(stats.avgLatency).text}
           </span>
         </div>
 
@@ -381,20 +370,20 @@ export default function NetworkAnalyticsPage() {
             </h3>
           </div>
           <span className="text-[11px] font-black text-gray-400 tracking-widest mt-4 uppercase">
-            Loss Rate: {loading ? '--' : `${(100 - stats.pdr).toFixed(1)}%`}
+            Rasio Paket Hilang: {loading ? '--' : `${(100 - stats.pdr).toFixed(1)}%`}
           </span>
         </div>
 
         <div className="bg-[#2D365E] rounded-[40px] p-8 shadow-xl flex items-center justify-between overflow-hidden relative border border-white/5">
           <div className="z-10">
             <p className="text-xs font-black text-white/40 uppercase tracking-widest mb-2 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-emerald-400" /> Avg Network Throughput
+              <Zap className="w-4 h-4 text-emerald-400" /> Rata-Rata Throughput
             </p>
             <h3 className="text-4xl font-black text-white uppercase tracking-tight mb-1">
               {loading ? '--' : `${stats.avgThroughput.toFixed(2)} bps`}
             </h3>
             <p className="text-sm font-bold text-emerald-400">
-              RSSI Aktual: {loading ? '--' : `${stats.currentRssi} dBm`}
+              RSSI Real-Time: {loading ? '--' : `${stats.currentRssi} dBm`}
             </p>
           </div>
           <div className="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/30 font-black text-xs">
@@ -411,20 +400,20 @@ export default function NetworkAnalyticsPage() {
               onClick={() => setChartMode('qos')}
               className={`px-5 py-2 rounded-lg text-xs font-black uppercase transition-all ${chartMode === 'qos' ? 'bg-white text-[#2D365E] shadow-sm' : 'text-gray-400'}`}
             >
-              Latency & Throughput Trend
+              Tren Latensi & Throughput
             </button>
             <button 
               onClick={() => setChartMode('signal')}
               className={`px-5 py-2 rounded-lg text-xs font-black uppercase transition-all ${chartMode === 'signal' ? 'bg-white text-[#2D365E] shadow-sm' : 'text-gray-400'}`}
             >
-              Signal Strength (RSSI / SNR)
+              Kualitas Sinyal RF (RSSI / SNR)
             </button>
           </div>
         </div>
 
         <div className="flex-grow flex items-center justify-center w-full">
           {loading ? (
-            <div className="animate-pulse font-black text-gray-200 text-2xl uppercase tracking-widest">Processing database telemetry...</div>
+            <div className="animate-pulse font-black text-gray-200 text-2xl uppercase tracking-widest">Memproses Telemetri Database...</div>
           ) : chartData.length > 0 ? (
             chartMode === 'qos' ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -437,10 +426,10 @@ export default function NetworkAnalyticsPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                   <XAxis dataKey="displayX" axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} />
-                  <YAxis width={65} axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} domain={[0, 4000]} label={{ value: 'Performance Metric Level', angle: -90, position: 'insideLeft', fill: '#2D365E', offset: 5, fontWeight: 'bold', fontSize: 11 }} />
+                  <YAxis width={65} axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} domain={[0, 4000]} label={{ value: 'Tingkat Metrik Performa', angle: -90, position: 'insideLeft', fill: '#2D365E', offset: 5, fontWeight: 'bold', fontSize: 11 }} />
                   <RechartsTooltip content={<CustomNetworkTooltip mode="qos" />} />
                   <Legend verticalAlign="top" height={36} iconType="circle" />
-                  <ReferenceLine y={2500} stroke="#cb6060" strokeDasharray="4 4" strokeWidth={1.5} label={{ value: 'Batas Tinggi Delay Jaringan', fill: '#cb6060', fontSize: 10, fontWeight: 'bold', position: 'top' }} />
+                  <ReferenceLine y={2500} stroke="#cb6060" strokeDasharray="4 4" strokeWidth={1.5} label={{ value: 'Batas Toleransi Ambang Delay Jaringan', fill: '#cb6060', fontSize: 10, fontWeight: 'bold', position: 'top' }} />
                   <Area type="monotone" dataKey="latency" name="Latency (ms)" stroke="#2D365E" strokeWidth={4} fillOpacity={1} fill="url(#colorLatency)" />
                   <Line type="monotone" dataKey="throughput" name="Throughput (bps)" stroke="#10b981" strokeWidth={3} dot={false} />
                 </AreaChart>
@@ -450,10 +439,10 @@ export default function NetworkAnalyticsPage() {
                 <LineChart data={chartData} margin={{ left: 10, right: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                   <XAxis dataKey="displayX" axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} />
-                  <YAxis width={65} axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} domain={[-130, 20]} label={{ value: 'Signal Level (dBm / dB)', angle: -90, position: 'insideLeft', fill: '#2D365E', offset: 5, fontWeight: 'bold', fontSize: 11 }} />
+                  <YAxis width={65} axisLine={false} tickLine={false} tick={{fill: '#2D365E', fontSize: 11, fontWeight: 'bold'}} domain={[-130, 20]} label={{ value: 'Level Sinyal RF (dBm / dB)', angle: -90, position: 'insideLeft', fill: '#2D365E', offset: 5, fontWeight: 'bold', fontSize: 11 }} />
                   <RechartsTooltip content={<CustomNetworkTooltip mode="signal" />} />
                   <Legend verticalAlign="top" height={36} iconType="circle" />
-                  <ReferenceLine y={-115} stroke="#cb6060" strokeDasharray="6 6" strokeWidth={1.5} label={{ value: 'LoRa Sensitivity Edge (-115 dBm)', fill: '#cb6060', fontSize: 9, fontWeight: 'bold', position: 'bottom' }} />
+                  <ReferenceLine y={-115} stroke="#cb6060" strokeDasharray="6 6" strokeWidth={1.5} label={{ value: 'Batas Sensitivitas Minimum LoRa (-115 dBm)', fill: '#cb6060', fontSize: 9, fontWeight: 'bold', position: 'bottom' }} />
                   <Line type="monotone" dataKey="rssi" name="RSSI (dBm)" stroke="#3b82f6" strokeWidth={3} dot={false} />
                   <Line type="monotone" dataKey="snr" name="SNR (dB)" stroke="#06b6d4" strokeWidth={2} dot={false} />
                 </LineChart>
@@ -461,13 +450,13 @@ export default function NetworkAnalyticsPage() {
             ) : (
               <div className="flex flex-col items-center opacity-25 select-none py-20">
                 <Wifi className="w-24 h-24 mb-2 text-[#2D365E]" />
-                <p className="font-black text-2xl uppercase tracking-[0.2em] text-[#2D365E]">No Signal Data Logged</p>
+                <p className="font-black text-2xl uppercase tracking-[0.2em] text-[#2D365E]">Tidak Ada Data Sinyal Terrekam</p>
               </div>
             )
           ) : (
             <div className="flex flex-col items-center opacity-15 select-none">
                <AlertTriangle className="w-24 h-24 mb-2 text-[#2D365E]" />
-               <p className="font-black text-2xl uppercase tracking-[0.2em] text-[#2D365E]">No Network Telemetry Found</p>
+               <p className="font-black text-2xl uppercase tracking-[0.2em] text-[#2D365E]">Data Telemetri Jaringan Kosong</p>
             </div>
           )}
         </div>
@@ -479,8 +468,8 @@ export default function NetworkAnalyticsPage() {
           <div className="flex items-center gap-3">
             <CheckCircle2 className="w-6 h-6 text-emerald-400" />
             <div>
-              <h2 className="text-2xl font-black uppercase tracking-tighter">Live Data Transmission Stream</h2>
-              <p className="text-[11px] text-white/50 font-bold uppercase tracking-wider mt-0.5">Arsip komunikasi QoS LoRa</p>
+              <h2 className="text-2xl font-black uppercase tracking-tighter">Live Telemetry Communication Stream</h2>
+              <p className="text-[11px] text-white/50 font-bold uppercase tracking-wider mt-0.5">Arsip Komunikasi Log Kualitas Layanan (QoS) LoRa</p>
             </div>
           </div>
           
@@ -489,14 +478,14 @@ export default function NetworkAnalyticsPage() {
               onClick={toggleSortOrder}
               className="flex items-center gap-2 bg-white/10 border border-white/10 px-4 py-2.5 rounded-xl text-xs font-black tracking-wide uppercase hover:bg-white/20 transition-all"
             >
-              <ArrowUpDown className="w-4 h-4" /> Urutan: {sortOrder === 'desc' ? 'Terbaru' : 'Terlama'}
+              <ArrowUpDown className="w-4 h-4" /> Urutan Kronologis: {sortOrder === 'desc' ? 'Terbaru' : 'Terlama'}
             </button>
             <button 
               onClick={exportToCSV}
               disabled={networkData.length === 0}
               className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-black tracking-wide uppercase transition-all shadow-lg"
             >
-              <Download className="w-4 h-4" /> Export (.CSV)
+              <Download className="w-4 h-4" /> Ekspor Laporan (.CSV)
             </button>
           </div>
         </div>
@@ -529,7 +518,7 @@ export default function NetworkAnalyticsPage() {
           ) : !loading && (
             <div className="col-span-full flex flex-col items-center justify-center py-10 opacity-30 border border-dashed border-white/10 rounded-2xl select-none">
                <Folder className="w-12 h-12 mb-2" />
-               <span className="text-xs font-black uppercase tracking-widest">No Active Month Folders Created</span>
+               <span className="text-xs font-black uppercase tracking-widest">Direktori Data Bulanan Tidak Ditemukan</span>
             </div>
           )}
         </div>
@@ -539,21 +528,21 @@ export default function NetworkAnalyticsPage() {
           <div className="bg-black/10 rounded-[35px] border border-white/5 p-6 transition-all duration-500">
             <div className="flex items-center gap-2 mb-4 text-white/40 text-[10px] font-black uppercase tracking-widest">
               <Calendar className="w-3 h-3 text-cyan-400" />
-              <span>Viewing Folder Arena: {selectedMonth} ({filteredMonthLogs.length} Logs)</span>
+              <span>Arsip Telemetri Bulanan: {selectedMonth} ({filteredMonthLogs.length} Rekaman Log)</span>
             </div>
             
             <div className="overflow-x-auto w-full mb-6">
               <table className="w-full text-left border-collapse min-w-[1700px]">
                 <thead>
                   <tr className="border-b border-white/10 text-white/40 text-[10px] font-black uppercase tracking-widest">
-                    <th className="pb-3 pl-4">Packet ID</th>
-                    <th className="pb-3">Timestamp Dibuat (RTC Alat)</th>
-                    <th className="pb-3">Timestamp Diterima (Cloud)</th>
-                    <th className="pb-3 text-center">Status Keterangan</th>
-                    <th className="pb-3 text-center">Data Path Flow</th>
-                    <th className="pb-3">Network Latency</th>
-                    <th className="pb-3">RF Strength (RSSI / SNR)</th>
-                    <th className="pb-3 pr-4">Throughput Rate</th>
+                    <th className="pb-3 pl-4">Identifikasi Paket</th>
+                    <th className="pb-3">Waktu Inisiasi (Edge Node)</th>
+                    <th className="pb-3">Waktu Presipitasi (Cloud Server)</th>
+                    <th className="pb-3 text-center">Status Transmisi</th>
+                    <th className="pb-3 text-center">Alur Topologi Jaringan</th>
+                    <th className="pb-3">End-to-End Latency</th>
+                    <th className="pb-3">Kualitas Sinyal RF (RSSI / SNR)</th>
+                    <th className="pb-3 pr-4">Laju Throughput</th>
                   </tr>
                 </thead>
                 <tbody className="text-xs font-bold divide-y divide-white/5">
@@ -574,7 +563,7 @@ export default function NetworkAnalyticsPage() {
                           </td>
                           <td className="py-4 text-center">
                             <span className="px-3 py-1 rounded-lg text-[9px] font-black bg-rose-500/20 border border-rose-500/30 text-rose-400 tracking-wide uppercase">
-                              FAILED (LOST)
+                              FAILED (PACKET LOSS)
                             </span>
                           </td>
                           <td className="py-4">
@@ -604,15 +593,15 @@ export default function NetworkAnalyticsPage() {
                         <td className="py-3.5 pl-4 font-mono text-white/40 group-hover:text-white">
                           #PKT-{String(log.id).padStart(3, '0')}
                         </td>
-                        {/* TIMESTAMP DIBUAT (RTC RASPI) */}
+                        {/* WAKTU INISIASI (EDGE NODE STRING DATE TIME) */}
                         <td className="py-4 font-mono text-cyan-300 font-bold">
                           {log.timestamp_kirim}
                         </td>
-                        {/* TIMESTAMP DITERIMA (CLOUD) */}
+                        {/* WAKTU PRESIPITASI (CLOUD SERVER) */}
                         <td className="py-4 font-mono text-white/70">
                           {new Date(log.created_at).toLocaleString('id-ID')}
                         </td>
-                        {/* STATUS KETERANGAN BERHASIL */}
+                        {/* STATUS TRANSMISI */}
                         <td className="py-4 text-center">
                           <span className="px-3 py-1 rounded-lg text-[9px] font-black bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 tracking-wide uppercase">
                             SUCCESS
@@ -647,21 +636,21 @@ export default function NetworkAnalyticsPage() {
             {/* NAVIGATION CONTROLS */}
             {totalPages > 1 && (
               <div className="flex flex-col sm:flex-row justify-between items-center gap-4 border-t border-white/5 pt-4 text-[11px] text-white/40 font-bold uppercase tracking-wider">
-                <span>Showing {indexOfFirstRow + 1} - {Math.min(indexOfLastRow, sortedLogs.length)} of {sortedLogs.length} logs inside {selectedMonth}</span>
+                <span>Menampilkan {indexOfFirstRow + 1} - {Math.min(indexOfLastRow, sortedLogs.length)} dari total {sortedLogs.length} rekaman di {selectedMonth}</span>
                 
                 <div className="flex items-center gap-6">
                   <form onSubmit={handlePageJump} className="flex items-center gap-2 bg-white/5 border border-white/10 p-1 rounded-xl">
                     <Hash className="w-3.5 h-3.5 text-white/30 ml-2" />
                     <input 
                       type="number" 
-                      placeholder="Slide ke..." 
+                      placeholder="Halaman..." 
                       value={pageInput}
                       onChange={(e) => setPageInput(e.target.value)}
                       min={1}
                       max={totalPages}
                       className="w-20 bg-transparent text-center font-black text-white outline-none text-xs placeholder:text-white/20"
                     />
-                    <button type="submit" className="bg-white text-[#2D365E] px-3 py-1 rounded-lg text-[10px] font-black tracking-wide uppercase hover:bg-gray-100 transition-all">Go</button>
+                    <button type="submit" className="bg-white text-[#2D365E] px-3 py-1 rounded-lg text-[10px] font-black tracking-wide uppercase hover:bg-gray-100 transition-all">Lompat</button>
                   </form>
 
                   <div className="flex items-center gap-2">
@@ -672,7 +661,7 @@ export default function NetworkAnalyticsPage() {
                     >
                       <ChevronLeft className="w-3.5 h-3.5" />
                     </button>
-                    <span className="text-white font-black px-1">Page {currentPage} of {totalPages}</span>
+                    <span className="text-white font-black px-1">Halaman {currentPage} dari {totalPages}</span>
                     <button 
                       onClick={() => { setCurrentPage(prev => Math.min(prev + 1, totalPages)); setPageInput(''); }}
                       disabled={currentPage === totalPages}
@@ -687,7 +676,7 @@ export default function NetworkAnalyticsPage() {
           </div>
         ) : !loading && (
           <div className="text-center py-14 bg-black/10 rounded-[35px] border border-white/5 text-white/20 font-black uppercase tracking-widest text-xs select-none">
-             Awaiting Live Telemetry Stream...
+             Menunggu Aliran Telemetri Real-Time...
           </div>
         )}
 

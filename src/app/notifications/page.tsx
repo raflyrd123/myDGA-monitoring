@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { 
   Bell, AlertTriangle, Clock, Trash2, CheckSquare, Square, 
   ShieldCheck, RefreshCw, Droplets, Thermometer, Waves, 
-  Mail, Plus, X, ChevronLeft, ChevronRight, Wind, Settings2
+  Mail, Plus, X, ChevronLeft, ChevronRight, Wind, MailCheck
 } from 'lucide-react';
 
 interface Notification {
@@ -25,7 +25,7 @@ export default function NotificationsPage() {
   const [emailList, setEmailList] = useState<string[]>([]);
   const [newEmailInput, setNewEmailInput] = useState('');
 
-  // --- PAGINASI (6 BARIS MAKSIMAL ANTI-SPAM) ---
+  // --- PAGINASI ---
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 6;
 
@@ -78,7 +78,7 @@ export default function NotificationsPage() {
     }
   };
 
-  // 🌟 INSTAN SAVE KETIKA TAMBAH EMAIL
+  // TAMBAH EMAIL
   const handleAddEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     const email = newEmailInput.trim().toLowerCase();
@@ -87,7 +87,6 @@ export default function NotificationsPage() {
       setEmailList(updatedList);
       setNewEmailInput('');
 
-      // Langsung tembak simpan ke database Supabase
       await supabase
         .from('app_settings')
         .upsert({ 
@@ -98,12 +97,11 @@ export default function NotificationsPage() {
     }
   };
 
-  // 🌟 INSTAN DELETE KETIKA KLIK TOMBOL SILANG (X)
+  // HAPUS EMAIL
   const handleRemoveEmail = async (emailToRemove: string) => {
     const updatedList = emailList.filter(email => email !== emailToRemove);
     setEmailList(updatedList);
 
-    // Langsung hapus dan update data terbaru ke Supabase
     await supabase
       .from('app_settings')
       .upsert({ 
@@ -113,7 +111,7 @@ export default function NotificationsPage() {
       });
   };
 
-  // --- LOGIKA AKSI TOMBOL HAPUS LOG NOTIFIKASI ---
+  // MANAJEMEN SELECT & HAPUS
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => 
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
@@ -125,6 +123,18 @@ export default function NotificationsPage() {
       setSelectedIds([]);
     } else {
       setSelectedIds(currentTableRows.map(n => n.id));
+    }
+  };
+
+  const deleteSingle = async (id: string) => {
+    const { error } = await supabase.from('notifications').delete().eq('id', id);
+    if (!error) {
+      const updatedNotifs = notifications.filter(n => n.id !== id);
+      setNotifications(updatedNotifs);
+      setSelectedIds(prev => prev.filter(i => i !== id));
+      if (currentPage > Math.ceil(updatedNotifs.length / rowsPerPage) && currentPage > 1) {
+        setCurrentPage(currentPage - 1);
+      }
     }
   };
 
@@ -143,7 +153,7 @@ export default function NotificationsPage() {
 
   const clearAllNotifications = async () => {
     if (notifications.length === 0) return;
-    if (confirm('Hapus seluruh log notifikasi di database?')) {
+    if (confirm('Apakah Anda yakin ingin menghapus semua notifikasi?')) {
       const { error } = await supabase.from('notifications').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       if (!error) {
         setNotifications([]);
@@ -159,7 +169,7 @@ export default function NotificationsPage() {
     if (text.includes('water') || text.includes('banjir') || text.includes('level')) return <Waves size={18} className="text-cyan-500" />;
     if (text.includes('hum') || text.includes('lembab')) return <Wind size={18} className="text-blue-400" />;
     if (text.includes('oil') || text.includes('warna')) return <Droplets size={18} className="text-amber-600" />;
-    return <AlertTriangle size={18} className="text-yellow-500" />;
+    return <AlertTriangle size={18} className="text-rose-500" />;
   };
 
   // Paginasi
@@ -172,34 +182,36 @@ export default function NotificationsPage() {
   return (
     <div className="p-10 bg-[#F4F7FE] min-h-screen text-[#2D365E]">
       
-      {/* HEADER ACTIONS */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
-        <h1 className="text-3xl font-black uppercase tracking-tight text-[#2D365E]">Notifications</h1>
+      {/* TOP HEADER */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+        <div>
+          <h1 className="text-4xl font-black uppercase tracking-tight text-[#2D365E]">Notifikasi</h1>
+        </div>
         
         {!loading && notifications.length > 0 && (
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3">
             <button 
               onClick={toggleSelectAllView}
-              className="text-[10px] font-black text-[#2D365E]/50 hover:text-[#2D365E] uppercase tracking-widest flex items-center gap-1.5 transition-colors"
+              className="bg-white border border-gray-200 text-[#2D365E] text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm"
             >
-              {selectedIds.length === currentTableRows.length ? <CheckSquare size={14} /> : <Square size={14} />}
-              Pilih Baris
+              {selectedIds.length === currentTableRows.length && currentTableRows.length > 0 ? <CheckSquare size={16} /> : <Square size={16} />}
+              Pilih Semua
             </button>
             
             {selectedIds.length > 0 && (
               <button 
                 onClick={deleteSelected}
-                className="bg-red-500 hover:bg-red-600 text-white text-[10px] font-black px-4 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-md uppercase tracking-widest"
+                className="bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-md"
               >
-                <Trash2 size={12} /> Hapus Terpilih ({selectedIds.length})
+                <Trash2 size={14} /> Hapus Terpilih ({selectedIds.length})
               </button>
             )}
 
             <button 
               onClick={clearAllNotifications}
-              className="bg-[#2D365E]/10 hover:bg-red-500 hover:text-white text-[#2D365E] text-[10px] font-black px-4 py-2 rounded-xl flex items-center gap-1.5 transition-all uppercase tracking-widest"
+              className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-md"
             >
-              <Trash2 size={12} /> Kosongkan Log ({notifications.length})
+              <Trash2 size={14} /> Hapus Semua ({notifications.length})
             </button>
           </div>
         )}
@@ -207,138 +219,148 @@ export default function NotificationsPage() {
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
         
-        {/* PANEL KIRI: LIST LOGS */}
+        {/* PANEL UTAMA: LIST NOTIFIKASI */}
         <div className="xl:col-span-8 space-y-6">
           
-          {/* RECENT HIGHLIGHT HERO CARD */}
+          {/* BANNER NOTIFIKASI TERBARU */}
           {!loading && latestAlert && (
-            <div className="bg-gradient-to-r from-red-500 to-rose-600 rounded-[30px] p-5 text-white shadow-lg border border-white/10 relative">
-              <div className="flex gap-1.5 items-center text-[9px] font-black uppercase tracking-widest text-red-100 mb-2 bg-black/20 w-fit px-2.5 py-1 rounded-lg">
-                <Bell size={10} className="animate-bounce" /> RECENT ALERT HIGHLIGHT
+            <div className="bg-rose-600 rounded-[30px] p-6 text-white shadow-xl relative overflow-hidden border border-rose-500">
+              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-rose-200 mb-3 bg-black/20 w-fit px-3 py-1 rounded-lg">
+                <Bell size={14} className="animate-bounce" /> Peringatan Terbaru
               </div>
-              <h2 className="text-lg font-black uppercase tracking-tight mb-1">{latestAlert.title}</h2>
-              <p className="text-xs font-bold text-red-50/90 mb-3 leading-relaxed">{latestAlert.message}</p>
-              <div className="text-[9px] font-mono font-black text-red-200 flex items-center gap-1">
-                <Clock size={10} /> {new Date(latestAlert.created_at).toLocaleString('id-ID')}
+              <h2 className="text-xl font-black tracking-tight mb-2">{latestAlert.title}</h2>
+              <p className="text-sm font-medium text-rose-50/90 leading-relaxed mb-4">{latestAlert.message}</p>
+              <div className="text-xs font-mono font-bold text-rose-200 flex items-center gap-1.5">
+                <Clock size={12} /> {new Date(latestAlert.created_at).toLocaleString('id-ID')}
               </div>
             </div>
           )}
 
-          {/* TABLE BOX ALERTS */}
+          {/* LIST ITEMS */}
           {loading ? (
             <div className="flex flex-col items-center justify-center bg-white rounded-[35px] p-20 shadow-xl border border-gray-100">
-              <RefreshCw className="animate-spin text-[#2D365E]/20 mb-2" size={32} />
-              <p className="text-[10px] font-black text-[#2D365E]/30 uppercase tracking-widest">Streaming logs...</p>
+              <RefreshCw className="animate-spin text-[#2D365E]/20 mb-3" size={36} />
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Memuat Notifikasi...</p>
             </div>
           ) : notifications.length > 0 ? (
             <div className="space-y-4">
-              <div className="bg-white rounded-[35px] shadow-xl border border-gray-100 overflow-hidden divide-y divide-gray-50">
+              <div className="space-y-3">
                 {currentTableRows.map((notif) => {
                   const isSelected = selectedIds.includes(notif.id);
                   return (
                     <div 
                       key={notif.id}
-                      onClick={() => toggleSelect(notif.id)}
-                      className={`flex items-center gap-4 p-4 cursor-pointer transition-all ${
-                        isSelected ? 'bg-[#F4F7FE]' : 'hover:bg-gray-50/40'
+                      className={`flex items-start gap-4 p-5 rounded-2xl border transition-all bg-white shadow-sm hover:shadow-md ${
+                        isSelected ? 'border-[#2D365E] bg-blue-50/30' : 'border-gray-100'
                       }`}
                     >
-                      <div className={isSelected ? 'text-[#2D365E]' : 'text-gray-200'}>
-                        {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
-                      </div>
+                      <button 
+                        onClick={() => toggleSelect(notif.id)}
+                        className="mt-1 text-gray-400 hover:text-[#2D365E] transition-colors"
+                      >
+                        {isSelected ? <CheckSquare size={18} className="text-[#2D365E]" /> : <Square size={18} />}
+                      </button>
 
-                      <div className={`p-2 rounded-xl shrink-0 ${notif.type === 'critical' ? 'bg-red-50' : 'bg-amber-50'}`}>
+                      <div className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${notif.type === 'critical' ? 'bg-rose-50' : 'bg-amber-50'}`}>
                         {resolveDynamicIcon(notif.title, notif.message)}
                       </div>
 
-                      <div className="flex-grow grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
-                        <div className="md:col-span-4">
-                          <div className="font-black text-xs uppercase tracking-tight text-[#2D365E] truncate">
-                            {notif.title}
-                          </div>
+                      <div className="flex-grow space-y-1">
+                        <div className="flex justify-between items-start gap-4">
+                          <h4 className="font-black text-sm text-[#2D365E]">{notif.title}</h4>
+                          <span className="text-[11px] font-mono font-bold text-gray-400 whitespace-nowrap flex items-center gap-1">
+                            <Clock size={11} />
+                            {new Date(notif.created_at).toLocaleString('id-ID')}
+                          </span>
                         </div>
-                        <div className="md:col-span-5">
-                          <div className="text-[11px] text-gray-500 font-bold uppercase tracking-tight truncate">
-                            {notif.message}
-                          </div>
-                        </div>
-                        <div className="md:col-span-3 text-left md:text-right">
-                          <div className="text-[9px] font-black text-gray-300 uppercase flex items-center justify-start md:justify-end gap-1">
-                            <Clock size={10} />
-                            {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </div>
-                        </div>
+                        <p className="text-xs text-gray-600 font-medium leading-relaxed">{notif.message}</p>
                       </div>
+
+                      <button 
+                        onClick={() => deleteSingle(notif.id)}
+                        className="p-2 text-gray-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all shrink-0"
+                        title="Hapus Notifikasi"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
                   );
                 })}
               </div>
 
-              {/* NAVIGASI HALAMAN */}
+              {/* PAGINASI */}
               {totalPages > 1 && (
-                <div className="flex justify-between items-center px-4 text-[10px] font-black text-gray-400 uppercase tracking-wider">
-                  <span>Log {indexOfFirstRow + 1} - {Math.min(indexOfLastRow, notifications.length)} dari {notifications.length} baris</span>
+                <div className="flex justify-between items-center px-4 pt-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                  <span>Menampilkan {indexOfFirstRow + 1} - {Math.min(indexOfLastRow, notifications.length)} dari {notifications.length} data</span>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="p-1.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 disabled:opacity-20 transition-all shadow-sm">
-                      <ChevronLeft size={14} />
+                    <button 
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} 
+                      disabled={currentPage === 1} 
+                      className="p-2 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 disabled:opacity-20 transition-all shadow-sm text-[#2D365E]"
+                    >
+                      <ChevronLeft size={16} />
                     </button>
-                    <span className="text-[#2D365E]">Hal {currentPage} / {totalPages}</span>
-                    <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="p-1.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-50 disabled:opacity-20 transition-all shadow-sm">
-                      <ChevronRight size={14} />
+                    <span className="text-[#2D365E] px-2 font-black">Halaman {currentPage} dari {totalPages}</span>
+                    <button 
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} 
+                      disabled={currentPage === totalPages} 
+                      className="p-2 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 disabled:opacity-20 transition-all shadow-sm text-[#2D365E]"
+                    >
+                      <ChevronRight size={16} />
                     </button>
                   </div>
                 </div>
               )}
             </div>
           ) : (
-            <div className="bg-white rounded-[35px] border p-16 flex flex-col items-center justify-center text-center shadow-xl">
-              <ShieldCheck size={32} className="text-emerald-500 mb-2" />
-              <h2 className="text-xs font-black uppercase text-[#2D365E]">Sistem Trafo Normal</h2>
+            <div className="bg-white rounded-[35px] border border-gray-100 p-16 flex flex-col items-center justify-center text-center shadow-xl">
+              <ShieldCheck size={48} className="text-emerald-500 mb-3" />
+              <h2 className="text-base font-black uppercase text-[#2D365E]">Tidak Ada Notifikasi</h2>
             </div>
           )}
         </div>
 
-        {/* PANEL KANAN: SMTP EMAIL DISPATCHER (INSTAN AUTO SAVE) */}
-        <div className="xl:col-span-4 bg-white rounded-[35px] p-6 shadow-xl border border-gray-100 space-y-4">
-          <div className="flex items-center gap-2 border-b pb-3">
-            <Settings2 size={18} className="text-[#2D365E]" />
-            <h2 className="text-sm font-black uppercase tracking-tight">SMTP Email Dispatcher</h2>
+        {/* PANEL KANAN: EMAIL PENERIMA ALERT */}
+        <div className="xl:col-span-4 bg-white rounded-[35px] p-6 shadow-xl border border-gray-100 space-y-5">
+          <div className="flex items-center gap-2 border-b border-gray-100 pb-4">
+            <MailCheck size={20} className="text-[#2D365E]" />
+            <h2 className="text-base font-black uppercase tracking-tight text-[#2D365E]">Email Penerima Alert</h2>
           </div>
 
           <form onSubmit={handleAddEmail} className="flex gap-2">
             <input 
               type="email" 
-              placeholder="Tambah email baru..."
+              placeholder="Masukkan email..."
               value={newEmailInput}
               onChange={(e) => setNewEmailInput(e.target.value)}
-              className="flex-grow p-2.5 bg-[#F4F7FE] text-xs font-bold rounded-xl outline-none focus:ring-1 focus:ring-[#2D365E]"
+              className="flex-grow p-3 bg-[#F4F7FE] text-xs font-bold rounded-xl outline-none focus:ring-1 focus:ring-[#2D365E] border border-gray-100 text-[#2D365E]"
             />
-            <button type="submit" className="bg-[#2D365E] text-white p-2.5 rounded-xl transition-all shadow-md hover:bg-[#3d497c] flex items-center justify-center">
-              <Plus size={16} />
+            <button type="submit" className="bg-[#2D365E] text-white p-3 rounded-xl transition-all shadow-md hover:bg-[#3d497c] flex items-center justify-center">
+              <Plus size={18} />
             </button>
           </form>
 
-          <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
             {emailList.length > 0 ? (
               emailList.map((email) => (
-                <div key={email} className="flex justify-between items-center p-2.5 bg-[#F4F7FE] rounded-xl border border-gray-100 group">
+                <div key={email} className="flex justify-between items-center p-3 bg-[#F4F7FE] rounded-xl border border-gray-100">
                   <div className="flex items-center gap-2 text-xs font-bold text-[#2D365E] truncate">
-                    <Mail size={12} className="text-indigo-500 shrink-0" />
+                    <Mail size={14} className="text-indigo-500 shrink-0" />
                     <span className="truncate">{email}</span>
                   </div>
                   
-                  {/* TOMBOL SILANG LANGSUNG ACTION HAPUS INSTAN */}
                   <button 
                     onClick={() => handleRemoveEmail(email)} 
                     type="button" 
-                    className="text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all p-1 rounded-lg"
+                    className="text-gray-400 hover:text-rose-500 hover:bg-rose-50 transition-all p-1 rounded-lg"
+                    title="Hapus Email"
                   >
-                    <X size={14} />
+                    <X size={16} />
                   </button>
                 </div>
               ))
             ) : (
-              <div className="text-center py-6 border border-dashed rounded-xl opacity-30 select-none text-[10px] font-black uppercase">
+              <div className="text-center py-8 border border-dashed border-gray-200 rounded-xl select-none text-xs font-bold text-gray-400">
                 Belum ada email terdaftar
               </div>
             )}

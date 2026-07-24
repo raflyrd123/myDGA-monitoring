@@ -279,7 +279,7 @@ export default function NetworkAnalyticsPage() {
     return () => { supabase.removeChannel(networkChannel); };
   }, [timeRange]);
 
-  // DELETE LOGIC
+  // DELETE LOGIC (WITH CHUNKING FOR LARGE DATASETS)
   const handleDeleteLog = async (dbId: any, packetId: any) => {
     if (!dbId) return;
     const confirmDelete = window.confirm(`Are you sure you want to permanently delete packet #${packetId} from Supabase?`);
@@ -305,8 +305,12 @@ export default function NetworkAnalyticsPage() {
 
     setLoading(true);
     try {
-      const { error } = await supabase.from('sensor_logs').delete().in('id', selectedIds);
-      if (error) throw error;
+      const batchSize = 500;
+      for (let i = 0; i < selectedIds.length; i += batchSize) {
+        const batch = selectedIds.slice(i, i + batchSize);
+        const { error } = await supabase.from('sensor_logs').delete().in('id', batch);
+        if (error) throw error;
+      }
 
       setNetworkData(prev => prev.filter(log => !selectedIds.includes(log.dbId)));
       setSelectedIds([]);
@@ -322,7 +326,7 @@ export default function NetworkAnalyticsPage() {
   const handleDeleteAllCurrentMonth = async () => {
     if (!selectedMonth || sortedLogs.length === 0) return;
 
-    const confirm1 = window.confirm(`⚠️ CRITICAL ACTION!\nAre you sure you want to delete ALL records for ${selectedMonth} from the cloud database?`);
+    const confirm1 = window.confirm(`⚠️ CRITICAL ACTION!\nAre you sure you want to delete ALL records for ${selectedMonth} (${filteredMonthLogs.length} rows) from the cloud database?`);
     if (!confirm1) return;
 
     const confirm2 = window.confirm("🔥 This action is destructive and cannot be undone. Click OK to proceed.");
@@ -332,8 +336,11 @@ export default function NetworkAnalyticsPage() {
     try {
       const idsToDelete = filteredMonthLogs.map(l => l.dbId).filter(Boolean);
       
-      if (idsToDelete.length > 0) {
-        const { error } = await supabase.from('sensor_logs').delete().in('id', idsToDelete);
+      // Batch delete in chunks of 500 to prevent HTTP payload overflow / timeout
+      const batchSize = 500;
+      for (let i = 0; i < idsToDelete.length; i += batchSize) {
+        const batch = idsToDelete.slice(i, i + batchSize);
+        const { error } = await supabase.from('sensor_logs').delete().in('id', batch);
         if (error) throw error;
       }
 

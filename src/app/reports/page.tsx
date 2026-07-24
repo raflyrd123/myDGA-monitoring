@@ -4,14 +4,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Download, FileSpreadsheet, AlertCircle, Calendar, ArrowUpDown, ChevronLeft, ChevronRight, Hash, ChevronDown, Trash2 } from 'lucide-react';
 
-// COMPONENTS HOISTING FOR ACCESSIBILITY
-const LegendItem = ({ color, label, isDark = false }: { color: string, label: string, isDark?: boolean }) => (
-  <div className="flex items-center gap-2">
-    <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: color }}></div>
-    <span className={`text-[11px] font-bold tracking-tight ${isDark ? 'text-gray-400' : 'text-white/60'}`}>{label}</span>
-  </div>
-);
-
 export default function ReportsPage() {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +41,7 @@ export default function ReportsPage() {
   const fetchAvailableArchives = async () => {
     setLoading(true);
     
-    // 1. Ambil app_settings duluan buat dapet data baseline kalibrasi koper DGA
+    // 1. Ambil app_settings duluan untuk data baseline kalibrasi koper DGA
     const { data: config } = await supabase
       .from('app_settings')
       .select('value')
@@ -99,7 +91,7 @@ export default function ReportsPage() {
     const lastDay = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
     const activeSettings = currentSettings || settings;
 
-    // 🌟 UNLIMITED ROW FIX: Menggunakan rekursi chunking paralel otomatis untuk bypass batas 1000 PostgREST Supabase
+    // Chunking Paralel Otomatis untuk Bypass Limit 1000 Supabase
     let allLogs: any[] = [];
     let fromOffset = 0;
     let keepFetching = true;
@@ -111,7 +103,7 @@ export default function ReportsPage() {
         .gte('created_at', firstDay)
         .lte('created_at', lastDay)
         .order('created_at', { ascending: false })
-        .range(fromOffset, fromOffset + 999); // Tarik blok 1000 baris bertahap
+        .range(fromOffset, fromOffset + 999);
 
       if (error || !data || data.length === 0) {
         keepFetching = false;
@@ -129,7 +121,6 @@ export default function ReportsPage() {
     const processedLogs = allLogs.map(log => {
       const baseline = activeSettings?.flood?.groundDistance || 100;
       const sensorReading = log.water_level_cm || 0;
-      // 🌟 REVISI LOGIKA AIR: Tinggi Air = Baseline Tinggi Wadah - Jarak Pantulan JSN-SR04T
       const actualWaterHeightCm = Math.max(0, baseline - sensorReading);
       return {
         ...log,
@@ -142,8 +133,7 @@ export default function ReportsPage() {
     setLoading(false);
   };
 
-  // --- LOGIKA UTAMA SINKRONISASI HAPUS DATA KE CLOUD DB ---
-
+  // --- LOGIKA HAPUS DATA ---
   const handleDeleteLog = async (id: any) => {
     const confirmDelete = window.confirm("Apakah Anda yakin ingin menghapus baris data log ini secara permanen dari database Supabase?");
     if (!confirmDelete) return;
@@ -191,7 +181,7 @@ export default function ReportsPage() {
     const confirm1 = window.confirm(`⚠️ DETEKSI AKSI KRITIS!!\nApakah Anda yakin ingin menghapus SELURUH data (${logs.length} baris) pada bulan ${getMonthName(viewDetail.month)} ${viewDetail.year} dari database cloud?`);
     if (!confirm1) return;
 
-    const confirm2 = window.confirm("🔥 KONFIRMASI TERAKHIR:\nTindakan ini bersifat destruktif dan tidak bisa dicancel kembali. Tekan OK jika Anda benar-benar yakin.");
+    const confirm2 = window.confirm("🔥 KONFIRMASI TERAKHIR:\nTindakan ini bersifat destruktif dan tidak bisa dibatalkan. Tekan OK jika Anda benar-benar yakin.");
     if (!confirm2) return;
 
     setLoading(true);
@@ -240,35 +230,44 @@ export default function ReportsPage() {
   const indexOfFirstRow = indexOfLastRow - rowsPerPage;
   const currentTableRows = sortedLogs.slice(indexOfFirstRow, indexOfLastRow);
 
+  // 🌟 FIX BUG: Menambahkan 'e.' sebelum preventDefault()
   const handlePageJump = (e: React.FormEvent) => {
-    preventDefault();
+    e.preventDefault();
     const targetPage = parseInt(pageInput);
     if (!isNaN(targetPage) && targetPage >= 1 && targetPage <= totalPages) {
       setCurrentPage(targetPage);
     }
   };
 
+  // 🌟 OPTIMIZED BLOB-BASED CSV EXPORTER
   const generateCSV = (dataList: any[], filename: string) => {
     const headers = [
-      "Timestamp", "Packet ID", "H2 (ppm)", "CO (ppm)", "NH3 (ppm)", "CH4 (ppm)", 
+      "Waktu Kirim (RTC Alat)", "Waktu Diterima (Cloud)", "Packet ID", "H2 (ppm)", "CO (ppm)", "NH3 (ppm)", "CH4 (ppm)", 
       "C3H8 (ppm)", "C4H10 (ppm)", "C2H4 (ppm)", "C2H2 (ppm)", "C2H6 (ppm)", 
       "Temp (C)", "Hum (%)", "Oil Color (%)", "Water Level (cm)", "Safety Float"
     ];
+    
     const rows = dataList.map(log => [
-      new Date(log.created_at).toLocaleString('id-ID'),
-      log.packet_id || '-',
+      log.timestamp_kirim ? `"${log.timestamp_kirim}"` : `"${new Date(log.created_at).toLocaleString('id-ID')}"`,
+      `"${new Date(log.created_at).toLocaleString('id-ID')}"`,
+      log.packet_id ? `PKT-${String(log.packet_id).padStart(3, '0')}` : '-',
       log.hydrogen_h2 ?? 0, log.carbon_monoxide_co ?? 0, log.ammonia_nh3 ?? 0, log.methane_ch4 ?? 0,
       log.propane_c3h8 ?? 0, log.butane_c4h10 ?? 0, log.ethylene_c2h4 ?? 0, log.acetylene_c2h2 ?? 0, log.ethane_c2h6 ?? 0,
       log.temperature_c ?? 0, log.humidity_pct ?? 0, log.oil_color_pct ?? 0, 
       log.water_level_actual !== undefined ? log.water_level_actual.toFixed(2) : (log.water_level_cm ?? 0), 
       log.safety_float || '-'
     ]);
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
+
+    const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
     const a = document.createElement("a");
-    a.href = encodedUri;
+    a.href = url;
     a.download = filename;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     setShowExportDropdown(false);
   };
 
@@ -281,7 +280,6 @@ export default function ReportsPage() {
   const exportAllTimeData = async () => {
     setLoading(true);
     
-    // 🌟 UNLIMITED MASTER MASTER EXPORT: Lakukan hal yang sama untuk master download seluruh histori koper riset
     let masterLogs: any[] = [];
     let currentOffset = 0;
     let fetchingMaster = true;
@@ -340,7 +338,6 @@ export default function ReportsPage() {
             <Download size={16} /> Export Data <ChevronDown size={14} className={`transition-transform duration-200 ${showExportDropdown ? 'rotate-180' : ''}`} />
           </button>
           
-          {/* ... Dropdown content tetap dipertahankan ... */}
           {showExportDropdown && (
             <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-50">
               <button 
@@ -490,8 +487,14 @@ export default function ReportsPage() {
                           className="w-4 h-4 rounded border-gray-300 text-[#2D365E] focus:ring-[#2D365E] cursor-pointer"
                         />
                       </td>
-                      <td className="p-4 text-gray-400 font-mono whitespace-nowrap">
-                        {new Date(log.created_at).toLocaleDateString('id-ID')} - {new Date(log.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}
+                      {/* 🌟 TIMESTAMP DISPLAY: Menampilkan Waktu Kirim RTC + Waktu Diterima Cloud */}
+                      <td className="p-4 font-mono whitespace-nowrap">
+                        <span className="block text-[#2D365E] font-black">
+                          {log.timestamp_kirim || new Date(log.created_at).toLocaleString('id-ID')}
+                        </span>
+                        <span className="block text-[9px] text-gray-400 font-medium mt-0.5">
+                          Cloud: {new Date(log.created_at).toLocaleDateString('id-ID')} {new Date(log.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}
+                        </span>
                       </td>
                       <td className="p-4 text-center text-gray-400 font-mono">#{String(log.packet_id || indexOfFirstRow + i + 1).padStart(3, '0')}</td>
                       <td className="p-4 text-center text-[#2D365E] font-mono">{log.hydrogen_h2 ?? 0} ppm</td>
@@ -506,7 +509,6 @@ export default function ReportsPage() {
                       <td className="p-4 text-center text-[#2D365E] font-mono">{log.temperature_c ?? 0}°C</td>
                       <td className="p-4 text-center text-[#2D365E] font-mono">{log.humidity_pct ?? 0}%</td>
                       <td className="p-4 text-center text-[#2D365E] font-mono">{log.oil_color_pct ?? 0}%</td>
-                      {/* 🌟 FIX INDIKATOR: Menampilkan tinggi air fisis riil koma lengkap (2 desimal) */}
                       <td className="p-4 text-center text-[#2D365E] font-mono">
                         {log.water_level_actual !== undefined ? log.water_level_actual.toFixed(2) : '0.00'} cm
                       </td>

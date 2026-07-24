@@ -58,29 +58,34 @@ export default function AboutPage() {
 
   return (
     <div className="p-10 text-[#2D365E] min-h-screen flex flex-col items-center">
-      {/* HEADER & TENTANG MYDGA */}
+      
+      {/* HEADER & ABOUT MYDGA */}
       <div className="mb-16 w-full flex flex-col items-center">
         <h1 className="text-5xl font-black uppercase tracking-tighter mb-10 w-full text-left">About myDGA</h1>
         
         <div className="bg-white rounded-[50px] p-12 shadow-2xl border border-gray-50 max-w-5xl w-full text-center">
-          <h2 className="text-2xl font-black mb-8 uppercase tracking-widest text-[#2D365E]">Tentang myDGA</h2>
+          <h2 className="text-2xl font-black mb-8 uppercase tracking-widest text-[#2D365E]">Overview</h2>
           <div className="space-y-6 text-xl font-medium leading-relaxed text-gray-500 text-left md:text-center">
             <p>
-              <span className="font-bold text-[#2D365E]">myDGA</span> merupakan sistem monitoring kesehatan transformator daya berbasis Digital Twin yang dikembangkan melalui riset mendalam di <span className="font-bold text-[#2D365E]">SISGRID Laboratory</span>. Riset ini difokuskan pada deteksi dini kegagalan internal trafo guna mencegah kerusakan fatal pada sistem transmisi tenaga listrik.
+              <span className="font-bold text-[#2D365E]">myDGA</span> is a power transformer health monitoring system based on Digital Twin technology, developed through intensive research at the <span className="font-bold text-[#2D365E]">SISGRID Laboratory</span>. This research focuses on early internal transformer fault detection to prevent catastrophic failures in electric power transmission systems.
             </p>
             <p>
-              Dengan mengintegrasikan pemantauan suhu, kelembapan, dan gas-gas terlarut secara real-time, sistem ini bertujuan untuk memberikan analisis kondisi aset yang akurat tanpa perlu melakukan pengujian manual di lapangan secara terus-menerus.
+              By integrating real-time monitoring of temperature, humidity, multi-gas dissolved concentrations, oil color degradation, and water level/flood status via LoRa wireless communication and cloud database infrastructure, this system provides accurate asset condition analytics without requiring continuous manual field testing.
             </p>
             
             <div className="bg-gray-50 p-10 rounded-[40px] border border-gray-100 mt-8 text-left">
-              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-6 text-center">Fitur Unggulan:</p>
+              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-6 text-center">System Features:</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-12 text-sm font-bold text-[#2D365E]">
-                <div className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#2ac7c7] rounded-full" /> Real-time Monitoring & Dashboard</div>
-                <div className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#2ac7c7] rounded-full" /> Automated Duval Triangle Diagnosis</div>
-                <div className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#2ac7c7] rounded-full" /> Multi-Gas Trend Analysis</div>
-                <div className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#2ac7c7] rounded-full" /> Early Warning System (Flood & Overheat)</div>
-                <div className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#2ac7c7] rounded-full" /> Historic Data Archiving & Reporting</div>
-                <div className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#2ac7c7] rounded-full" /> Dynamic Calibration & Thresholds</div>
+                <div className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#2ac7c7] rounded-full" /> Real-Time Telemetry Dashboard</div>
+                <div className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#2ac7c7] rounded-full" /> Automated Duval Triangle Fault Diagnosis</div>
+                <div className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#2ac7c7] rounded-full" /> Multi-Gas Trend Analytics (H2, CO, CH4, etc.)</div>
+                <div className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#2ac7c7] rounded-full" /> Transformer Temperature & Humidity Tracking</div>
+                <div className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#2ac7c7] rounded-full" /> Transformer Oil Color Degradation Monitoring</div>
+                <div className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#2ac7c7] rounded-full" /> Ultrasonic Flood Mitigation & Float Switch Alert</div>
+                <div className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#2ac7c7] rounded-full" /> LoRa Network QoS & Latency Analytics</div>
+                <div className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#2ac7c7] rounded-full" /> Monthly Archive Reporting & CSV Export</div>
+                <div className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#2ac7c7] rounded-full" /> Real-Time Email Alerts via SMTP Dispatcher</div>
+                <div className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-[#2ac7c7] rounded-full" /> Dynamic Calibration & Threshold Management</div>
               </div>
             </div>
           </div>

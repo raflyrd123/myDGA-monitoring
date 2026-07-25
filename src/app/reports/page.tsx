@@ -61,7 +61,7 @@ export default function ReportsPage() {
       .single();
     if (config) setSettings(config.value);
 
-    // Unlimited row fetch for archives to bypass the default 1000-row limit
+    // Unlimited row fetch for archives to bypass default 1000-row limit
     let allDates: any[] = [];
     let fromOffset = 0;
     let keepFetchingDates = true;
@@ -166,13 +166,22 @@ export default function ReportsPage() {
         }
       }
 
+      // Dynamic Payload Size & Throughput calculation
+      const rawPayloadString = `${log.temperature_c ?? 0},${log.humidity_pct ?? 0},${log.water_level_cm ?? 0},${log.safety_float || 'OFF'},${log.packet_id || 0},${log.timestamp_kirim || ''}\n`;
+      const payloadSizeBytes = new TextEncoder().encode(rawPayloadString).length;
+      const latencyInSeconds = latency / 1000;
+      
+      const calculatedThroughput = latencyInSeconds > 0 
+        ? (payloadSizeBytes * 8) / latencyInSeconds 
+        : 0;
+
       return {
         ...log,
         water_level_actual: actualWaterHeightCm,
         latency,
         rssi: log.lora_rssi ?? 0,
         snr: log.lora_snr ?? 0,
-        throughput: 176.00 // Standard 220 bytes * 8 bits / 10s
+        throughput: calculatedThroughput
       };
     });
 
@@ -181,7 +190,6 @@ export default function ReportsPage() {
     setLoading(false);
   };
 
-  // --- DELETE LOGIC (WITH BATCHING TO PREVENT PAYLOAD OVERLOAD) ---
   const handleDeleteLog = async (id: any) => {
     const confirmDelete = window.confirm("Are you sure you want to delete this log entry from Supabase?");
     if (!confirmDelete) return;
@@ -218,7 +226,7 @@ export default function ReportsPage() {
       alert("All selected items successfully deleted!");
     } catch (err: any) {
       alert("Failed to delete data: " + err.message);
-    } finally {
+    } fontally {
       setLoading(false);
     }
   };
@@ -361,13 +369,23 @@ export default function ReportsPage() {
           latency = diff > 0 ? diff : 0;
         }
       }
+
+      // Dynamic Payload Size calculation for All-Time Export
+      const rawPayloadString = `${log.temperature_c ?? 0},${log.humidity_pct ?? 0},${log.water_level_cm ?? 0},${log.safety_float || 'OFF'},${log.packet_id || 0},${log.timestamp_kirim || ''}\n`;
+      const payloadSizeBytes = new TextEncoder().encode(rawPayloadString).length;
+      const latencyInSeconds = latency / 1000;
+      
+      const calculatedThroughput = latencyInSeconds > 0 
+        ? (payloadSizeBytes * 8) / latencyInSeconds 
+        : 0;
+
       return {
         ...log,
         water_level_actual: Math.max(0, baseline - (log.water_level_cm || 0)),
         latency,
         rssi: log.lora_rssi ?? 0,
         snr: log.lora_snr ?? 0,
-        throughput: 176.00
+        throughput: calculatedThroughput
       };
     });
 

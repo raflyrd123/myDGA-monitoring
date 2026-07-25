@@ -44,6 +44,7 @@ export default function SettingsPage() {
           fetchedValue.flood = { groundDistance: 50, warnLevel: 15, critLevel: 30 };
         }
 
+        // Full 9 DGA Gas threshold initialization
         if (!fetchedValue.gasThresholds) fetchedValue.gasThresholds = {};
         if (fetchedValue.gasThresholds.CO === undefined) fetchedValue.gasThresholds.CO = 350;
         if (fetchedValue.gasThresholds.H2 === undefined) fetchedValue.gasThresholds.H2 = 100;
@@ -52,6 +53,8 @@ export default function SettingsPage() {
         if (fetchedValue.gasThresholds.C2H2 === undefined) fetchedValue.gasThresholds.C2H2 = 1;
         if (fetchedValue.gasThresholds.C2H4 === undefined) fetchedValue.gasThresholds.C2H4 = 50;
         if (fetchedValue.gasThresholds.NH3 === undefined) fetchedValue.gasThresholds.NH3 = 25;
+        if (fetchedValue.gasThresholds.C3H8 === undefined) fetchedValue.gasThresholds.C3H8 = 65;
+        if (fetchedValue.gasThresholds.C4H10 === undefined) fetchedValue.gasThresholds.C4H10 = 65;
 
         setConfig(fetchedValue);
         setOriginalConfig(JSON.stringify(fetchedValue));
@@ -126,27 +129,16 @@ export default function SettingsPage() {
 
       <div className="space-y-12">
         
-        {/* PANEL 1: GAS SENSOR THRESHOLDS */}
+        {/* PANEL 1: GAS SENSOR THRESHOLDS (9 GAS SENSORS - 3x3 GRID) */}
         <div className="bg-white rounded-[45px] p-10 shadow-2xl border border-gray-100">
           <div className="flex items-center gap-3 mb-8 border-b pb-6">
             <Sliders className="text-[#2D365E]" size={28} />
             <h2 className="text-2xl font-black uppercase tracking-tighter">Gas Sensor Thresholds</h2>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* CO */}
-            <div className="p-5 bg-[#F4F7FE] rounded-[25px] border border-gray-200/50 flex flex-col justify-between">
-              <div>
-                <p className="font-black text-[10px] uppercase tracking-widest text-gray-400 mb-1">Sensor: MQ-135</p>
-                <h4 className="font-black text-lg text-[#2D365E]">Carbon Monoxide (CO)</h4>
-              </div>
-              <div className="mt-4">
-                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Alarm Limit (PPM)</label>
-                <input type="number" value={config.gasThresholds.CO} onChange={(e) => setConfig({...config, gasThresholds: { ...config.gasThresholds, CO: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-orange-200 outline-none" />
-              </div>
-            </div>
-
-            {/* H2 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            
+            {/* 1. H2 */}
             <div className="p-5 bg-[#F4F7FE] rounded-[25px] border border-gray-200/50 flex flex-col justify-between">
               <div>
                 <p className="font-black text-[10px] uppercase tracking-widest text-gray-400 mb-1">Sensor: MQ-8</p>
@@ -158,7 +150,31 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* CH4 */}
+            {/* 2. CO */}
+            <div className="p-5 bg-[#F4F7FE] rounded-[25px] border border-gray-200/50 flex flex-col justify-between">
+              <div>
+                <p className="font-black text-[10px] uppercase tracking-widest text-gray-400 mb-1">Sensor: MQ-135</p>
+                <h4 className="font-black text-lg text-[#2D365E]">Carbon Monoxide (CO)</h4>
+              </div>
+              <div className="mt-4">
+                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Alarm Limit (PPM)</label>
+                <input type="number" value={config.gasThresholds.CO} onChange={(e) => setConfig({...config, gasThresholds: { ...config.gasThresholds, CO: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-orange-200 outline-none" />
+              </div>
+            </div>
+
+            {/* 3. NH3 */}
+            <div className="p-5 bg-[#F4F7FE] rounded-[25px] border border-gray-200/50 flex flex-col justify-between">
+              <div>
+                <p className="font-black text-[10px] uppercase tracking-widest text-gray-400 mb-1">Sensor: TGS2602</p>
+                <h4 className="font-black text-lg text-[#2D365E]">Ammonia (NH3)</h4>
+              </div>
+              <div className="mt-4">
+                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Alarm Limit (PPM)</label>
+                <input type="number" value={config.gasThresholds.NH3} onChange={(e) => setConfig({...config, gasThresholds: { ...config.gasThresholds, NH3: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-orange-200 outline-none" />
+              </div>
+            </div>
+
+            {/* 4. CH4 */}
             <div className="p-5 bg-[#F4F7FE] rounded-[25px] border border-gray-200/50 flex flex-col justify-between">
               <div>
                 <p className="font-black text-[10px] uppercase tracking-widest text-gray-400 mb-1">Sensor: TGS2611</p>
@@ -170,31 +186,31 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* ETH */}
+            {/* 5. C3H8 (PROPANE) */}
             <div className="p-5 bg-[#F4F7FE] rounded-[25px] border border-gray-200/50 flex flex-col justify-between">
               <div>
-                <p className="font-black text-[10px] uppercase tracking-widest text-gray-400 mb-1">Sensor: TGS813</p>
-                <h4 className="font-black text-lg text-[#2D365E]">Ethane (C2H6)</h4>
+                <p className="font-black text-[10px] uppercase tracking-widest text-gray-400 mb-1">Sensor: MQ-6</p>
+                <h4 className="font-black text-lg text-[#2D365E]">Propane (C3H8)</h4>
               </div>
               <div className="mt-4">
                 <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Alarm Limit (PPM)</label>
-                <input type="number" value={config.gasThresholds.ETH} onChange={(e) => setConfig({...config, gasThresholds: { ...config.gasThresholds, ETH: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-orange-200 outline-none" />
+                <input type="number" value={config.gasThresholds.C3H8} onChange={(e) => setConfig({...config, gasThresholds: { ...config.gasThresholds, C3H8: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-orange-200 outline-none" />
               </div>
             </div>
 
-            {/* C2H2 */}
+            {/* 6. C4H10 (BUTANE) */}
             <div className="p-5 bg-[#F4F7FE] rounded-[25px] border border-gray-200/50 flex flex-col justify-between">
               <div>
-                <p className="font-black text-[10px] uppercase tracking-widest text-gray-400 mb-1">Sensor: MQ-9</p>
-                <h4 className="font-black text-lg text-[#2D365E]">Acetylene (C2H2)</h4>
+                <p className="font-black text-[10px] uppercase tracking-widest text-gray-400 mb-1">Sensor: MQ-6</p>
+                <h4 className="font-black text-lg text-[#2D365E]">Butane (C4H10)</h4>
               </div>
               <div className="mt-4">
                 <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Alarm Limit (PPM)</label>
-                <input type="number" value={config.gasThresholds.C2H2} onChange={(e) => setConfig({...config, gasThresholds: { ...config.gasThresholds, C2H2: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-orange-200 outline-none" />
+                <input type="number" value={config.gasThresholds.C4H10} onChange={(e) => setConfig({...config, gasThresholds: { ...config.gasThresholds, C4H10: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-orange-200 outline-none" />
               </div>
             </div>
 
-            {/* C2H4 */}
+            {/* 7. C2H4 */}
             <div className="p-5 bg-[#F4F7FE] rounded-[25px] border border-gray-200/50 flex flex-col justify-between">
               <div>
                 <p className="font-black text-[10px] uppercase tracking-widest text-gray-400 mb-1">Sensor: TGS2600</p>
@@ -206,17 +222,30 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* NH3 */}
+            {/* 8. C2H2 */}
             <div className="p-5 bg-[#F4F7FE] rounded-[25px] border border-gray-200/50 flex flex-col justify-between">
               <div>
-                <p className="font-black text-[10px] uppercase tracking-widest text-gray-400 mb-1">Sensor: TGS2602</p>
-                <h4 className="font-black text-lg text-[#2D365E]">Ammonia (NH3)</h4>
+                <p className="font-black text-[10px] uppercase tracking-widest text-gray-400 mb-1">Sensor: MQ-9</p>
+                <h4 className="font-black text-lg text-[#2D365E]">Acetylene (C2H2)</h4>
               </div>
               <div className="mt-4">
                 <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Alarm Limit (PPM)</label>
-                <input type="number" value={config.gasThresholds.NH3} onChange={(e) => setConfig({...config, gasThresholds: { ...config.gasThresholds, NH3: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-orange-200 outline-none" />
+                <input type="number" value={config.gasThresholds.C2H2} onChange={(e) => setConfig({...config, gasThresholds: { ...config.gasThresholds, C2H2: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-orange-200 outline-none" />
               </div>
             </div>
+
+            {/* 9. ETH (ETHANE - C2H6) */}
+            <div className="p-5 bg-[#F4F7FE] rounded-[25px] border border-gray-200/50 flex flex-col justify-between">
+              <div>
+                <p className="font-black text-[10px] uppercase tracking-widest text-gray-400 mb-1">Sensor: TGS813</p>
+                <h4 className="font-black text-lg text-[#2D365E]">Ethane (C2H6)</h4>
+              </div>
+              <div className="mt-4">
+                <label className="text-[10px] font-black text-orange-500 uppercase block mb-1">Alarm Limit (PPM)</label>
+                <input type="number" value={config.gasThresholds.ETH} onChange={(e) => setConfig({...config, gasThresholds: { ...config.gasThresholds, ETH: Number(e.target.value) }})} className="w-full bg-white rounded-xl p-3 font-bold text-sm text-[#2D365E] border border-orange-200 outline-none" />
+              </div>
+            </div>
+
           </div>
         </div>
 

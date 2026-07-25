@@ -51,6 +51,84 @@ export default function ReportsPage() {
     return String(ts);
   };
 
+  // Helper function to calculate QoS metrics & inject FAILED/LOST packet gaps
+  const injectFailedPackets = (rawLogs: any[], activeSettings: any) => {
+    if (!rawLogs || rawLogs.length === 0) return [];
+
+    // Sort by packet_id descending
+    const sorted = [...rawLogs].sort((a, b) => (b.packet_id || 0) - (a.packet_id || 0));
+    const result: any[] = [];
+
+    for (let i = 0; i < sorted.length; i++) {
+      const currentLog = sorted[i];
+      
+      const baseline = activeSettings?.flood?.groundDistance || 100;
+      const sensorReading = currentLog.water_level_cm || 0;
+      const actualWaterHeightCm = Math.max(0, baseline - sensorReading);
+
+      // Latency calculation
+      let latency = 0;
+      if (currentLog.timestamp_kirim && currentLog.timestamp_kirim !== '-') {
+        const strTs = String(currentLog.timestamp_kirim).trim();
+        const isoStr = strTs.includes('T') ? strTs : strTs.replace(' ', 'T') + '+07:00';
+        const sentTime = new Date(isoStr).getTime();
+        const receivedTime = new Date(currentLog.created_at).getTime();
+        if (!isNaN(sentTime) && sentTime > 0) {
+          const diff = receivedTime - sentTime;
+          latency = diff > 0 ? diff : 0;
+        }
+      }
+
+      // Dynamic Payload Size & Throughput calculation
+      const rawPayloadString = `${currentLog.temperature_c ?? 0},${currentLog.humidity_pct ?? 0},${currentLog.water_level_cm ?? 0},${currentLog.safety_float || 'OFF'},${currentLog.packet_id || 0},${currentLog.timestamp_kirim || ''}\n`;
+      const payloadSizeBytes = new TextEncoder().encode(rawPayloadString).length;
+      const latencyInSeconds = latency / 1000;
+      const calculatedThroughput = latencyInSeconds > 0 
+        ? (payloadSizeBytes * 8) / latencyInSeconds 
+        : 0;
+
+      // Push valid log
+      result.push({
+        ...currentLog,
+        water_level_actual: actualWaterHeightCm,
+        latency,
+        rssi: currentLog.lora_rssi ?? 0,
+        snr: currentLog.lora_snr ?? 0,
+        throughput: calculatedThroughput,
+        is_failed: false
+      });
+
+      // Detect sequence gap for FAILED packets
+      if (i < sorted.length - 1) {
+        const currId = Number(currentLog.packet_id);
+        const nextId = Number(sorted[i + 1].packet_id);
+
+        if (!isNaN(currId) && !isNaN(nextId) && currId - nextId > 1) {
+          for (let missingId = currId - 1; missingId > nextId; missingId--) {
+            result.push({
+              id: `failed-${missingId}`,
+              packet_id: missingId,
+              timestamp_kirim: '-',
+              created_at: currentLog.created_at,
+              temperature_c: null,
+              humidity_pct: null,
+              oil_color_pct: null,
+              water_level_actual: null,
+              safety_float: '-',
+              latency: 0,
+              rssi: 0,
+              snr: 0,
+              throughput: 0,
+              is_failed: true
+            });
+          }
+        }
+      }
+    }
+
+    return result;
+  };
+
   const fetchAvailableArchives = async () => {
     setLoading(true);
     
@@ -61,7 +139,6 @@ export default function ReportsPage() {
       .single();
     if (config) setSettings(config.value);
 
-    // Unlimited row fetch for archives to bypass default 1000-row limit
     let allDates: any[] = [];
     let fromOffset = 0;
     let keepFetchingDates = true;
@@ -140,50 +217,12 @@ export default function ReportsPage() {
         keepFetching = false;
       } else {
         allLogs = [...allLogs, ...data];
-        if (data.length < 1000) {
-          keepFetching = false;
-        } else {
-          fromOffset += 1000;
-        }
+        if (data.length < 1000) keepFetching = false;
+        else fromOffset += 1000;
       }
     }
 
-    const processedLogs = allLogs.map(log => {
-      const baseline = activeSettings?.flood?.groundDistance || 100;
-      const sensorReading = log.water_level_cm || 0;
-      const actualWaterHeightCm = Math.max(0, baseline - sensorReading);
-
-      // Latency calculation
-      let latency = 0;
-      if (log.timestamp_kirim && log.timestamp_kirim !== '-') {
-        const strTs = String(log.timestamp_kirim).trim();
-        const isoStr = strTs.includes('T') ? strTs : strTs.replace(' ', 'T') + '+07:00';
-        const sentTime = new Date(isoStr).getTime();
-        const receivedTime = new Date(log.created_at).getTime();
-        if (!isNaN(sentTime) && sentTime > 0) {
-          const diff = receivedTime - sentTime;
-          latency = diff > 0 ? diff : 0;
-        }
-      }
-
-      // Dynamic Payload Size & Throughput calculation
-      const rawPayloadString = `${log.temperature_c ?? 0},${log.humidity_pct ?? 0},${log.water_level_cm ?? 0},${log.safety_float || 'OFF'},${log.packet_id || 0},${log.timestamp_kirim || ''}\n`;
-      const payloadSizeBytes = new TextEncoder().encode(rawPayloadString).length;
-      const latencyInSeconds = latency / 1000;
-      
-      const calculatedThroughput = latencyInSeconds > 0 
-        ? (payloadSizeBytes * 8) / latencyInSeconds 
-        : 0;
-
-      return {
-        ...log,
-        water_level_actual: actualWaterHeightCm,
-        latency,
-        rssi: log.lora_rssi ?? 0,
-        snr: log.lora_snr ?? 0,
-        throughput: calculatedThroughput
-      };
-    });
+    const processedLogs = injectFailedPackets(allLogs, activeSettings);
 
     setLogs(processedLogs);
     setViewDetail({ year, month });
@@ -239,7 +278,7 @@ export default function ReportsPage() {
 
     setLoading(true);
     try {
-      const idsToDelete = logs.map(l => l.id).filter(Boolean);
+      const idsToDelete = logs.map(l => l.id).filter(id => !String(id).startsWith('failed-'));
       
       const batchSize = 500;
       for (let i = 0; i < idsToDelete.length; i += batchSize) {
@@ -270,9 +309,9 @@ export default function ReportsPage() {
   };
 
   const sortedLogs = [...logs].sort((a, b) => {
-    const timeA = new Date(a.created_at).getTime();
-    const timeB = new Date(b.created_at).getTime();
-    return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
+    const idA = Number(a.packet_id) || 0;
+    const idB = Number(b.packet_id) || 0;
+    return sortOrder === 'desc' ? idB - idA : idA - idB;
   });
 
   const totalPages = Math.ceil(sortedLogs.length / rowsPerPage);
@@ -290,7 +329,7 @@ export default function ReportsPage() {
 
   const generateCSV = (dataList: any[], filename: string) => {
     const headers = [
-      "Sent Time", "Received Time", "Packet ID", "H2 (ppm)", "CO (ppm)", "NH3 (ppm)", "CH4 (ppm)", 
+      "Sent Time", "Received Time", "Packet ID", "Status", "H2 (ppm)", "CO (ppm)", "NH3 (ppm)", "CH4 (ppm)", 
       "C3H8 (ppm)", "C4H10 (ppm)", "C2H4 (ppm)", "C2H2 (ppm)", "C2H6 (ppm)", 
       "Temperature (C)", "Humidity (%)", "Oil Color (%)", "Water Level (cm)", "Float Status",
       "Latency (ms)", "RSSI (dBm)", "SNR (dB)", "Throughput (bps)"
@@ -300,10 +339,11 @@ export default function ReportsPage() {
       `"${formatWaktu(log.timestamp_kirim)}"`,
       `"${new Date(log.created_at).toLocaleString('en-US')}"`,
       log.packet_id ? `PKT-${String(log.packet_id).padStart(3, '0')}` : '-',
+      log.is_failed ? "FAILED" : "SUCCESS",
       log.hydrogen_h2 ?? 0, log.carbon_monoxide_co ?? 0, log.ammonia_nh3 ?? 0, log.methane_ch4 ?? 0,
       log.propane_c3h8 ?? 0, log.butane_c4h10 ?? 0, log.ethylene_c2h4 ?? 0, log.acetylene_c2h2 ?? 0, log.ethane_c2h6 ?? 0,
       log.temperature_c ?? 0, log.humidity_pct ?? 0, log.oil_color_pct ?? 0, 
-      log.water_level_actual !== undefined ? log.water_level_actual.toFixed(2) : (log.water_level_cm ?? 0), 
+      log.water_level_actual !== undefined && log.water_level_actual !== null ? log.water_level_actual.toFixed(2) : (log.water_level_cm ?? 0), 
       log.safety_float || '-',
       log.latency ? log.latency.toFixed(0) : 0,
       log.rssi ?? 0,
@@ -348,46 +388,12 @@ export default function ReportsPage() {
         fetchingMaster = false;
       } else {
         masterLogs = [...masterLogs, ...data];
-        if (data.length < 1000) {
-          fetchingMaster = false;
-        } else {
-          currentOffset += 1000;
-        }
+        if (data.length < 1000) fetchingMaster = false;
+        else currentOffset += 1000;
       }
     }
 
-    const processedMaster = masterLogs.map(log => {
-      const baseline = settings?.flood?.groundDistance || 100;
-      let latency = 0;
-      if (log.timestamp_kirim && log.timestamp_kirim !== '-') {
-        const strTs = String(log.timestamp_kirim).trim();
-        const isoStr = strTs.includes('T') ? strTs : strTs.replace(' ', 'T') + '+07:00';
-        const sentTime = new Date(isoStr).getTime();
-        const receivedTime = new Date(log.created_at).getTime();
-        if (!isNaN(sentTime) && sentTime > 0) {
-          const diff = receivedTime - sentTime;
-          latency = diff > 0 ? diff : 0;
-        }
-      }
-
-      // Dynamic Payload Size calculation for All-Time Export
-      const rawPayloadString = `${log.temperature_c ?? 0},${log.humidity_pct ?? 0},${log.water_level_cm ?? 0},${log.safety_float || 'OFF'},${log.packet_id || 0},${log.timestamp_kirim || ''}\n`;
-      const payloadSizeBytes = new TextEncoder().encode(rawPayloadString).length;
-      const latencyInSeconds = latency / 1000;
-      
-      const calculatedThroughput = latencyInSeconds > 0 
-        ? (payloadSizeBytes * 8) / latencyInSeconds 
-        : 0;
-
-      return {
-        ...log,
-        water_level_actual: Math.max(0, baseline - (log.water_level_cm || 0)),
-        latency,
-        rssi: log.lora_rssi ?? 0,
-        snr: log.lora_snr ?? 0,
-        throughput: calculatedThroughput
-      };
-    });
+    const processedMaster = injectFailedPackets(masterLogs, settings);
 
     if (processedMaster.length > 0) {
       generateCSV(processedMaster, `myDGA_Master_Report_AllTime.csv`);
@@ -520,13 +526,13 @@ export default function ReportsPage() {
                   <th className="p-3.5 pl-6 text-center whitespace-nowrap w-12">
                     <input 
                       type="checkbox"
-                      checked={currentTableRows.length > 0 && currentTableRows.every(r => selectedIds.includes(r.id))}
+                      checked={currentTableRows.length > 0 && currentTableRows.filter(r => !r.is_failed).every(r => selectedIds.includes(r.id))}
                       onChange={(e) => {
-                        const currentIds = currentTableRows.map(r => r.id);
+                        const currentValidIds = currentTableRows.filter(r => !r.is_failed).map(r => r.id);
                         if (e.target.checked) {
-                          setSelectedIds(prev => Array.from(new Set([...prev, ...currentIds])));
+                          setSelectedIds(prev => Array.from(new Set([...prev, ...currentValidIds])));
                         } else {
-                          setSelectedIds(prev => prev.filter(id => !currentIds.includes(id)));
+                          setSelectedIds(prev => prev.filter(id => !currentValidIds.includes(id)));
                         }
                       }}
                       className="w-4 h-4 rounded border-gray-300 text-[#2D365E] focus:ring-[#2D365E] cursor-pointer"
@@ -576,91 +582,106 @@ export default function ReportsPage() {
                   currentTableRows.map((log, i) => (
                     <tr 
                       key={log.id || i} 
-                      className={`transition-colors hover:bg-slate-50/80 ${selectedIds.includes(log.id) ? 'bg-indigo-50/30' : ''}`}
+                      className={`transition-colors ${
+                        log.is_failed 
+                          ? 'bg-red-50/90 hover:bg-red-100/80 text-red-900' 
+                          : selectedIds.includes(log.id) ? 'bg-indigo-50/30' : 'hover:bg-slate-50/80'
+                      }`}
                     >
                       {/* CHECKBOX */}
                       <td className="p-3.5 pl-6 text-center">
-                        <input 
-                          type="checkbox"
-                          checked={selectedIds.includes(log.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedIds(prev => [...prev, log.id]);
-                            } else {
-                              setSelectedIds(prev => prev.filter(id => id !== log.id));
-                            }
-                          }}
-                          className="w-4 h-4 rounded border-gray-300 text-[#2D365E] focus:ring-[#2D365E] cursor-pointer"
-                        />
+                        {!log.is_failed && (
+                          <input 
+                            type="checkbox"
+                            checked={selectedIds.includes(log.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedIds(prev => [...prev, log.id]);
+                              else setSelectedIds(prev => prev.filter(id => id !== log.id));
+                            }}
+                            className="w-4 h-4 rounded border-gray-300 text-[#2D365E] focus:ring-[#2D365E] cursor-pointer"
+                          />
+                        )}
                       </td>
 
                       {/* LOG INFO */}
-                      <td className="p-3.5 text-[#2D365E] font-mono font-black whitespace-nowrap">
-                        {formatWaktu(log.timestamp_kirim)}
+                      <td className="p-3.5 font-mono font-black whitespace-nowrap">
+                        {log.is_failed ? <span className="text-red-500 font-bold">PACKET DROPPED</span> : formatWaktu(log.timestamp_kirim)}
                       </td>
                       <td className="p-3.5 text-gray-500 font-mono whitespace-nowrap">
                         {new Date(log.created_at).toLocaleString('en-US')}
                       </td>
                       <td className="p-3.5 text-center">
-                        <span className="bg-slate-100 text-slate-700 font-mono text-[10px] font-black px-2.5 py-1 rounded-md border border-slate-200">
-                          #PKT-{String(log.packet_id || indexOfFirstRow + i + 1).padStart(3, '0')}
+                        <span className={`font-mono text-[10px] font-black px-2.5 py-1 rounded-md border ${
+                          log.is_failed 
+                            ? 'bg-red-200 text-red-800 border-red-300' 
+                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                        }`}>
+                          #PKT-{String(log.packet_id).padStart(3, '0')}
                         </span>
                       </td>
 
-                      {/* TRANSMISSION TOPOLOGY PATH */}
-                      <td className="p-3.5 border-r border-gray-100">
-                        <div className="flex items-center justify-center gap-1.5 text-[9px] font-black text-gray-500 bg-gray-50 py-1 px-2.5 rounded-lg border border-gray-200/60 max-w-[230px] mx-auto shadow-none">
-                          <span>RASPI</span>
-                          <ArrowRight className="w-2.5 h-2.5 text-emerald-500 shrink-0" />
-                          <span>LORA 1</span>
-                          <ArrowRight className="w-2.5 h-2.5 text-emerald-500 shrink-0" />
-                          <span className="text-[#2D365E]">GATEWAY</span>
-                        </div>
+                      {/* TRANSMISSION PATH / FAILED BADGE */}
+                      <td className="p-3.5 border-r border-gray-100 text-center">
+                        {log.is_failed ? (
+                          <span className="bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-sm">
+                            ⚠️ TRANSMISSION FAILED
+                          </span>
+                        ) : (
+                          <div className="flex items-center justify-center gap-1.5 text-[9px] font-black text-gray-500 bg-gray-50 py-1 px-2.5 rounded-lg border border-gray-200/60 max-w-[230px] mx-auto shadow-none">
+                            <span>RASPI</span>
+                            <ArrowRight className="w-2.5 h-2.5 text-emerald-500 shrink-0" />
+                            <span>LORA 1</span>
+                            <ArrowRight className="w-2.5 h-2.5 text-emerald-500 shrink-0" />
+                            <span className="text-[#2D365E]">GATEWAY</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* DGA GASES (PPM) */}
-                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.hydrogen_h2 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
-                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.carbon_monoxide_co ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
-                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.ammonia_nh3 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
-                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.methane_ch4 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
-                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.propane_c3h8 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
-                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.butane_c4h10 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
-                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.ethylene_c2h4 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
-                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.acetylene_c2h2 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
-                      <td className="p-3.5 text-center text-[#2D365E] font-mono border-r border-gray-100">{log.ethane_c2h6 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
+                      <td className="p-3.5 text-center font-mono">{log.is_failed ? '--' : `${log.hydrogen_h2 ?? 0} ppm`}</td>
+                      <td className="p-3.5 text-center font-mono">{log.is_failed ? '--' : `${log.carbon_monoxide_co ?? 0} ppm`}</td>
+                      <td className="p-3.5 text-center font-mono">{log.is_failed ? '--' : `${log.ammonia_nh3 ?? 0} ppm`}</td>
+                      <td className="p-3.5 text-center font-mono">{log.is_failed ? '--' : `${log.methane_ch4 ?? 0} ppm`}</td>
+                      <td className="p-3.5 text-center font-mono">{log.is_failed ? '--' : `${log.propane_c3h8 ?? 0} ppm`}</td>
+                      <td className="p-3.5 text-center font-mono">{log.is_failed ? '--' : `${log.butane_c4h10 ?? 0} ppm`}</td>
+                      <td className="p-3.5 text-center font-mono">{log.is_failed ? '--' : `${log.ethylene_c2h4 ?? 0} ppm`}</td>
+                      <td className="p-3.5 text-center font-mono">{log.is_failed ? '--' : `${log.acetylene_c2h2 ?? 0} ppm`}</td>
+                      <td className="p-3.5 text-center font-mono border-r border-gray-100">{log.is_failed ? '--' : `${log.ethane_c2h6 ?? 0} ppm`}</td>
 
                       {/* ENVIRONMENT & HEALTH */}
-                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.temperature_c ?? 0}°C</td>
-                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.humidity_pct ?? 0}%</td>
-                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.oil_color_pct ?? 0}%</td>
-                      <td className="p-3.5 text-center text-[#2D365E] font-mono">
-                        {log.water_level_actual !== undefined ? log.water_level_actual.toFixed(2) : '0.00'} cm
-                      </td>
+                      <td className="p-3.5 text-center font-mono">{log.is_failed ? '--' : `${log.temperature_c ?? 0}°C`}</td>
+                      <td className="p-3.5 text-center font-mono">{log.is_failed ? '--' : `${log.humidity_pct ?? 0}%`}</td>
+                      <td className="p-3.5 text-center font-mono">{log.is_failed ? '--' : `${log.oil_color_pct ?? 0}%`}</td>
+                      <td className="p-3.5 text-center font-mono">{log.is_failed ? '--' : `${log.water_level_actual !== undefined ? log.water_level_actual.toFixed(2) : '0.00'} cm`}</td>
                       <td className="p-3.5 text-center border-r border-gray-100">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                          log.safety_float === 'ON' 
-                            ? 'bg-amber-100 text-amber-700 border border-amber-300' 
-                            : 'bg-slate-100 text-slate-500 border border-slate-200'
-                        }`}>
-                          {log.safety_float || 'OFF'}
-                        </span>
+                        {log.is_failed ? '--' : (
+                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                            log.safety_float === 'ON' 
+                              ? 'bg-amber-100 text-amber-700 border border-amber-300' 
+                              : 'bg-slate-100 text-slate-500 border border-slate-200'
+                          }`}>
+                            {log.safety_float || 'OFF'}
+                          </span>
+                        )}
                       </td>
                       
                       {/* LORA NETWORK METRICS COLUMNS */}
-                      <td className="p-3.5 text-center font-mono text-indigo-700 bg-indigo-50/30">{log.latency.toFixed(0)} ms</td>
-                      <td className="p-3.5 text-center font-mono text-blue-700 bg-blue-50/30">{log.rssi !== 0 ? `${log.rssi} dBm` : '--'}</td>
-                      <td className="p-3.5 text-center font-mono text-cyan-700 bg-cyan-50/30">{log.snr.toFixed(1)} dB</td>
-                      <td className="p-3.5 text-center font-mono text-emerald-700 bg-emerald-50/30 border-r border-gray-100">{log.throughput.toFixed(2)} bps</td>
+                      <td className="p-3.5 text-center font-mono text-red-600 font-black">{log.is_failed ? 'TIMEOUT' : `${log.latency.toFixed(0)} ms`}</td>
+                      <td className="p-3.5 text-center font-mono">{log.is_failed ? '--' : (log.rssi !== 0 ? `${log.rssi} dBm` : '--')}</td>
+                      <td className="p-3.5 text-center font-mono">{log.is_failed ? '--' : `${log.snr.toFixed(1)} dB`}</td>
+                      <td className="p-3.5 text-center font-mono text-red-600 font-black border-r border-gray-100">{log.is_failed ? '0.00 bps' : `${log.throughput.toFixed(2)} bps`}</td>
 
                       {/* ACTION BUTTON */}
                       <td className="p-3.5 text-center pr-6 whitespace-nowrap">
-                        <button 
-                          onClick={() => handleDeleteLog(log.id)}
-                          className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-700 transition-colors shadow-sm"
-                          title="Delete this row"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {!log.is_failed && (
+                          <button 
+                            onClick={() => handleDeleteLog(log.id)}
+                            className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-700 transition-colors shadow-sm"
+                            title="Delete this row"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))

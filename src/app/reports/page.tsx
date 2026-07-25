@@ -226,7 +226,7 @@ export default function ReportsPage() {
       alert("All selected items successfully deleted!");
     } catch (err: any) {
       alert("Failed to delete data: " + err.message);
-    } fontally {
+    } finally {
       setLoading(false);
     }
   };

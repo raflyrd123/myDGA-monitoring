@@ -288,7 +288,9 @@ export default function ReportsPage() {
     const headers = [
       "Sent Time", "Received Time", "Packet ID", "H2 (ppm)", "CO (ppm)", "NH3 (ppm)", "CH4 (ppm)", 
       "C3H8 (ppm)", "C4H10 (ppm)", "C2H4 (ppm)", "C2H2 (ppm)", "C2H6 (ppm)", 
-      "Temperature (C)", "Humidity (%)", "Oil Color (%)", "Water Level (cm)", "Float Status",
+      "Temperature (C)", "Humidity (%)", "Oil Color (%)", 
+      "Oil R", "Oil G", "Oil B", "ASTM Scale", "Regression (y)",
+      "Water Level (cm)", "Float Status",
       "Latency (ms)", "RSSI (dBm)", "SNR (dB)", "Throughput (bps)"
     ];
     
@@ -298,7 +300,10 @@ export default function ReportsPage() {
       log.packet_id ? `PKT-${String(log.packet_id).padStart(3, '0')}` : '-',
       log.hydrogen_h2 ?? 0, log.carbon_monoxide_co ?? 0, log.ammonia_nh3 ?? 0, log.methane_ch4 ?? 0,
       log.propane_c3h8 ?? 0, log.butane_c4h10 ?? 0, log.ethylene_c2h4 ?? 0, log.acetylene_c2h2 ?? 0, log.ethane_c2h6 ?? 0,
-      log.temperature_c ?? 0, log.humidity_pct ?? 0, log.oil_color_pct ?? 0, 
+      log.temperature_c ?? 0, log.humidity_pct ?? 0, log.oil_color_pct ?? 0,
+      log.oil_r ?? 0, log.oil_g ?? 0, log.oil_b ?? 0,
+      log.oil_astm_scale !== undefined && log.oil_astm_scale !== null ? Number(log.oil_astm_scale).toFixed(1) : 0.5,
+      log.oil_regression_y !== undefined && log.oil_regression_y !== null ? Number(log.oil_regression_y).toFixed(4) : 0,
       log.water_level_actual !== undefined ? log.water_level_actual.toFixed(2) : (log.water_level_cm ?? 0), 
       log.safety_float || '-',
       log.latency ? log.latency.toFixed(0) : 0,
@@ -496,13 +501,13 @@ export default function ReportsPage() {
 
           {/* HIGH-END RESPONSIVE MASTER TABLE */}
           <div className="overflow-x-auto w-full mb-6 rounded-2xl border border-gray-100 shadow-inner">
-            <table className="w-full text-left border-collapse min-w-[2500px]">
+            <table className="w-full text-left border-collapse min-w-[2800px]">
               <thead>
                 {/* TOP CATEGORY GROUPING HEADER */}
                 <tr className="bg-[#2D365E] text-white text-[9px] font-black uppercase tracking-[0.2em] text-center border-b border-white/10">
                   <th colSpan={5} className="py-2.5 border-r border-white/10">1. Transmission & Log Info</th>
                   <th colSpan={9} className="py-2.5 border-r border-white/10 bg-[#252d4e]">2. DGA Gas Dissolved Analysis</th>
-                  <th colSpan={5} className="py-2.5 border-r border-white/10">3. Transformer & Environment Health</th>
+                  <th colSpan={8} className="py-2.5 border-r border-white/10">3. Transformer & Oil Optical Health</th>
                   <th colSpan={4} className="py-2.5 border-r border-white/10 bg-[#1e2544]">4. LoRa Communication QoS</th>
                   <th colSpan={1} className="py-2.5">Action</th>
                 </tr>
@@ -540,10 +545,13 @@ export default function ReportsPage() {
                   <th className="p-3.5 text-center whitespace-nowrap">C2H2</th>
                   <th className="p-3.5 text-center whitespace-nowrap border-r border-gray-200">C2H6</th>
 
-                  {/* HEALTH & ENVIRONMENT */}
+                  {/* HEALTH & OPTICAL PROPERTIES */}
                   <th className="p-3.5 text-center whitespace-nowrap">Temp</th>
                   <th className="p-3.5 text-center whitespace-nowrap">Humidity</th>
                   <th className="p-3.5 text-center whitespace-nowrap">Oil Color</th>
+                  <th className="p-3.5 text-center whitespace-nowrap text-indigo-600 bg-indigo-50/50">RGB (R,G,B)</th>
+                  <th className="p-3.5 text-center whitespace-nowrap text-cyan-600 bg-cyan-50/50">ASTM Scale</th>
+                  <th className="p-3.5 text-center whitespace-nowrap text-purple-600 bg-purple-50/50">Reg (y)</th>
                   <th className="p-3.5 text-center whitespace-nowrap">Water Level</th>
                   <th className="p-3.5 text-center whitespace-nowrap border-r border-gray-200">Float Switch</th>
 
@@ -560,7 +568,7 @@ export default function ReportsPage() {
               <tbody className="text-xs font-bold divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={24} className="p-20 text-center animate-pulse font-black text-gray-300 text-lg tracking-widest">
+                    <td colSpan={27} className="p-20 text-center animate-pulse font-black text-gray-300 text-lg tracking-widest">
                       LOADING MASTER TELEMETRY DATA...
                     </td>
                   </tr>
@@ -621,7 +629,19 @@ export default function ReportsPage() {
                       {/* ENVIRONMENT & HEALTH */}
                       <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.temperature_c ?? 0}°C</td>
                       <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.humidity_pct ?? 0}%</td>
-                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.oil_color_pct ?? 0}%</td>
+                      <td className="p-3.5 text-center text-[#2D365E] font-mono font-black">{log.oil_color_pct ?? 0}%</td>
+                      
+                      {/* OPTICAL TCS34725 METRICS */}
+                      <td className="p-3.5 text-center font-mono text-indigo-700 bg-indigo-50/30 whitespace-nowrap">
+                        {log.oil_r ?? 0}, {log.oil_g ?? 0}, {log.oil_b ?? 0}
+                      </td>
+                      <td className="p-3.5 text-center font-mono font-black text-cyan-700 bg-cyan-50/30">
+                        {log.oil_astm_scale !== undefined && log.oil_astm_scale !== null ? Number(log.oil_astm_scale).toFixed(1) : '0.5'}
+                      </td>
+                      <td className="p-3.5 text-center font-mono text-purple-700 bg-purple-50/30">
+                        {log.oil_regression_y !== undefined && log.oil_regression_y !== null ? Number(log.oil_regression_y).toFixed(4) : '0.0000'}
+                      </td>
+
                       <td className="p-3.5 text-center text-[#2D365E] font-mono">
                         {log.water_level_actual !== undefined ? log.water_level_actual.toFixed(2) : '0.00'} cm
                       </td>
@@ -655,7 +675,7 @@ export default function ReportsPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={24} className="p-20 text-center font-black text-gray-300 text-lg tracking-widest">
+                    <td colSpan={27} className="p-20 text-center font-black text-gray-300 text-lg tracking-widest">
                       NO DATA AVAILABLE FOR THIS MONTH
                     </td>
                   </tr>

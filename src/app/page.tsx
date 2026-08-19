@@ -18,7 +18,7 @@ export default function DashboardPage() {
   const [humidityValue, setHumidityValue] = useState(0);
   const [oilColorValue, setOilColorValue] = useState(0);
   
-  // Optical Chamber States (ASTM D1500 & TCS34725)
+  // Optical Chamber States (ASTM D1500)
   const [oilR, setOilR] = useState(122);
   const [oilG, setOilG] = useState(105);
   const [oilB, setOilB] = useState(79);
@@ -195,11 +195,22 @@ export default function DashboardPage() {
     return { color: '#cb6060', label: 'Critical' };
   };
 
-  const getOilColorLabel = (val: number) => {
-    if (val <= 20) return "Clear (Excellent)";
-    if (val <= 50) return "Slightly Yellow (Light Degradation)";
-    if (val <= 80) return "Cloudy (Carbon Saturation)";
-    return "Dark (Severe Contamination)";
+  // Label Standar Industri Minyak Trafo (ASTM D1500)
+  const getOilColorLabel = (val: number, astm: number) => {
+    if (astm <= 1.5 || val <= 20) return "PALE YELLOW (CLEAR)";
+    if (astm <= 3.0 || val <= 50) return "YELLOW (MODERATE)";
+    if (astm <= 4.5 || val <= 75) return "DARK AMBER (CONCENTRATED)";
+    return "DARK / OPAQUE";
+  };
+
+  // Konversi Visual Warna Minyak Nyata untuk Dot Pratinjau
+  const getVisualOilColor = (astm: number) => {
+    if (astm <= 1.0) return '#FEF08A'; // Pale Yellow (Bening/Baru)
+    if (astm <= 2.0) return '#FACC15'; // Yellow
+    if (astm <= 3.0) return '#EAB308'; // Deep Yellow
+    if (astm <= 4.0) return '#D97706'; // Amber Pekat
+    if (astm <= 5.0) return '#9A3412'; // Cokelat / Dark Amber
+    return '#451A03';                  // Gelap Pekat / Burnt
   };
 
   if (!settings) return <div className="p-10 font-black uppercase opacity-20 text-[#2D365E]">Syncing Thresholds...</div>;
@@ -265,7 +276,7 @@ export default function DashboardPage() {
             </h2>
           </div>
           
-          {/* GAUGE & ANGKA SUHU */}
+          {/* GAUGE SUHU */}
           <div className="flex-grow flex items-center justify-center w-full relative my-2">
             <div className="w-[480px] h-[480px] max-w-full">{renderGauge(tempValue, (settings.temp?.crit || 120) + 10, curTemp.color, false, 14)}</div>
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
@@ -313,7 +324,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* CARD WARNA MINYAK LENGKAP DENGAN DATA OPTIK */}
+        {/* CARD WARNA MINYAK LENGKAP */}
         <div className="bg-[#2D365E] rounded-[50px] p-8 sm:p-10 flex flex-col justify-between shadow-2xl relative min-h-[700px] border border-white/5">
           <div className="flex items-center gap-3 w-full justify-center mb-2">
             <Image src="/icons/oil-color.png?v=1" alt="Oil" width={40} height={40} unoptimized />
@@ -329,38 +340,41 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* STATUS LABEL */}
+          {/* STATUS LABEL TEGAS */}
           <div className="flex justify-center mb-4">
-            <div className="text-[13px] font-extrabold uppercase tracking-wider text-white/70 bg-black/25 px-5 py-1.5 rounded-full border border-white/5 backdrop-blur-sm shadow-inner text-center">
-              {getOilColorLabel(oilColorValue)}
+            <div className="text-[13px] font-extrabold uppercase tracking-wider text-white/80 bg-black/25 px-5 py-1.5 rounded-full border border-white/5 backdrop-blur-sm shadow-inner text-center">
+              {getOilColorLabel(oilColorValue, Number(oilAstmScale))}
             </div>
           </div>
 
-          {/* OPTICAL HEALTH CHAMBER METRICS (RGB, ASTM, REGRESI) */}
+          {/* METRIK OIL CHAMBER */}
           <div className="w-full max-w-[500px] mx-auto bg-black/20 p-4 rounded-3xl border border-white/5 shadow-inner mb-4">
-            <span className="text-[9px] font-black tracking-widest text-cyan-400 uppercase block text-center mb-3">
-              TCS34725 Optical Chamber Spectroscopy Analysis
+            <span className="text-[10px] font-black tracking-widest text-cyan-400 uppercase block text-center mb-3">
+              Oil Chamber
             </span>
             <div className="grid grid-cols-3 gap-3 text-center">
               
-              {/* RGB METRIC BOX */}
+              {/* RGB VECTOR DENGAN WARNA ASLI */}
               <div className="bg-white/5 p-3 rounded-2xl border border-white/5 flex flex-col items-center justify-center">
                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Color Vector</span>
                 <div className="flex items-center gap-1.5 mb-1">
-                  <div className="w-3.5 h-3.5 rounded-full border border-white/40 shadow-sm" style={{ backgroundColor: `rgb(${oilR}, ${oilG}, ${oilB})` }}></div>
+                  <div 
+                    className="w-3.5 h-3.5 rounded-full border border-white/40 shadow-sm" 
+                    style={{ backgroundColor: getVisualOilColor(Number(oilAstmScale)) }}
+                  ></div>
                   <span className="text-xs font-black font-mono text-white">RGB</span>
                 </div>
                 <span className="text-[10px] font-mono font-bold text-white/80">{oilR}, {oilG}, {oilB}</span>
               </div>
 
-              {/* ASTM D1500 SCALE BOX */}
+              {/* ASTM D1500 SCALE */}
               <div className="bg-white/5 p-3 rounded-2xl border border-white/5 flex flex-col items-center justify-center">
                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-1">ASTM D1500</span>
                 <span className="text-lg font-black font-mono text-cyan-300 leading-tight mb-0.5">{Number(oilAstmScale).toFixed(1)}</span>
                 <span className="text-[9px] font-bold text-gray-400 uppercase">Scale Index</span>
               </div>
 
-              {/* REGRESSION Y BOX */}
+              {/* REGRESSION Y */}
               <div className="bg-white/5 p-3 rounded-2xl border border-white/5 flex flex-col items-center justify-center">
                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Regression (y)</span>
                 <span className="text-sm font-black font-mono text-purple-300 leading-tight mb-0.5">{Number(oilRegY).toFixed(4)}</span>
@@ -382,11 +396,11 @@ export default function DashboardPage() {
 
       </div>
 
-      {/* 3. RELATIVE HUMIDITY ROW (BARIS BARU PENUH) */}
+      {/* 3. RELATIVE HUMIDITY ROW (BARIS BARU) */}
       <div className="bg-[#2D365E] rounded-[50px] p-8 sm:p-10 shadow-2xl border border-white/5 mb-10 text-white">
         <div className="flex items-center gap-3 w-full justify-center mb-6">
           <Image src="/icons/humidity.png?v=1" alt="Humidity" width={40} height={40} unoptimized />
-          <h2 className="text-[24px] font-black tracking-tight text-center">Relative Humidity</h2>
+          <h2 className="text-[24px] font-black tracking-tight text-center">Relative Humidity (Enclosure & Environment)</h2>
         </div>
 
         <div className="max-w-4xl mx-auto px-4">

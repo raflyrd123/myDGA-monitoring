@@ -7,7 +7,7 @@ import Image from 'next/image';
 
 const LegendItem = ({ color, label, isDark = false }: { color: string, label: string, isDark?: boolean }) => (
   <div className="flex items-center gap-2">
-    <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: color }}></div>
+    <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: color }}></div>
     <span className={`text-[11px] font-bold tracking-tight ${isDark ? 'text-gray-400' : 'text-white/60'}`}>{label}</span>
   </div>
 );
@@ -17,6 +17,14 @@ export default function DashboardPage() {
   const [tempValue, setTempValue] = useState(0);
   const [humidityValue, setHumidityValue] = useState(0);
   const [oilColorValue, setOilColorValue] = useState(0);
+  
+  // Optical Chamber States (ASTM D1500 & TCS34725)
+  const [oilR, setOilR] = useState(122);
+  const [oilG, setOilG] = useState(105);
+  const [oilB, setOilB] = useState(79);
+  const [oilAstmScale, setOilAstmScale] = useState(0.5);
+  const [oilRegY, setOilRegY] = useState(0.6045);
+
   const [floodLevel, setFloodLevel] = useState(0); 
   const [floodText, setFloodText] = useState("0.00");
   
@@ -123,6 +131,13 @@ export default function DashboardPage() {
     setOilColorValue(data.oil_color_pct || 0);
     setFloatStatus(data.safety_float || "OFF");
 
+    // Optical RGB & ASTM States
+    setOilR(data.oil_r ?? 122);
+    setOilG(data.oil_g ?? 105);
+    setOilB(data.oil_b ?? 79);
+    setOilAstmScale(data.oil_astm_scale ?? 0.5);
+    setOilRegY(data.oil_regression_y ?? 0.6045);
+
     if (currentSettings?.flood?.groundDistance && currentSettings.flood.groundDistance > 0) {
       const baseline = currentSettings.flood.groundDistance;
       const sensorReading = data.water_level_cm || 0;
@@ -174,6 +189,12 @@ export default function DashboardPage() {
     return { color: '#2ac764', label: 'Safe' };
   };
 
+  const getOilColorStatus = (val: number) => {
+    if (val <= (settings?.oil?.warn || 33)) return { color: '#2ac764', label: 'Normal' };
+    if (val <= (settings?.oil?.crit || 66)) return { color: '#d8db26', label: 'Caution' };
+    return { color: '#cb6060', label: 'Critical' };
+  };
+
   const getOilColorLabel = (val: number) => {
     if (val <= 20) return "Clear (Excellent)";
     if (val <= 50) return "Slightly Yellow (Light Degradation)";
@@ -184,6 +205,7 @@ export default function DashboardPage() {
   if (!settings) return <div className="p-10 font-black uppercase opacity-20 text-[#2D365E]">Syncing Thresholds...</div>;
 
   const curTemp = getTempStatus(tempValue);
+  const curOil = getOilColorStatus(oilColorValue);
   const curFlood = getFloodStatus(parseFloat(floodText) || 0, floatStatus);
 
   const renderGauge = (value: number, total: number, color: string, isHalf: boolean = false, customStroke: number = 24) => {
@@ -204,10 +226,10 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="p-10">
+    <div className="p-10 text-[#2D365E]">
       <h1 className="text-4xl font-black tracking-tight uppercase leading-none mb-10 text-[#2D365E]">Dashboard</h1>
 
-      {/* GAS GRID */}
+      {/* 1. DGA GAS GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-10 text-white font-bold">
         {Object.entries(gasConfigs).map(([gasKey, config]: [string, any]) => {
           const limitValue = settings.gasThresholds?.[config.key] ?? 100;
@@ -231,37 +253,39 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* ENVIRONMENT ROW */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-10 text-white">
-        {/* TEMPERATURE CARD */}
-        <div className="lg:col-span-5 bg-[#2D365E] rounded-[50px] p-10 flex flex-col items-center shadow-2xl relative min-h-[680px]">
-          <div className="flex items-center gap-3 w-full justify-center mb-4">
-            <Image src="/icons/temperature.png?v=1" alt="Temp" width={44} height={44} unoptimized />
+      {/* 2. PRIMARY DIAGNOSTICS ROW: TEMPERATURE & OIL COLOR SEJAJAR (50:50) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10 text-white">
+        
+        {/* CARD SUHU TRANSFORMATOR */}
+        <div className="bg-[#2D365E] rounded-[50px] p-8 sm:p-10 flex flex-col justify-between shadow-2xl relative min-h-[700px] border border-white/5">
+          <div className="flex items-center gap-3 w-full justify-center mb-2">
+            <Image src="/icons/temperature.png?v=1" alt="Temp" width={40} height={40} unoptimized />
             <h2 className="text-[22px] font-black tracking-tight text-center">
               {settings.temp?.displayMode === 'oil' ? 'Oil Transformer Temperature' : 'Transformer Body Temperature'}
             </h2>
           </div>
           
-          <div className="flex-grow flex items-center justify-center w-full relative">
-            <div className="w-[600px] h-[600px]">{renderGauge(tempValue, (settings.temp?.crit || 120) + 10, curTemp.color, false, 14)}</div>
+          {/* GAUGE & ANGKA SUHU */}
+          <div className="flex-grow flex items-center justify-center w-full relative my-2">
+            <div className="w-[480px] h-[480px] max-w-full">{renderGauge(tempValue, (settings.temp?.crit || 120) + 10, curTemp.color, false, 14)}</div>
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                 <div className="relative flex items-center translate-x-[-5px] justify-center">
-                    <h3 className="text-[130px] font-bold leading-none tracking-tighter">{Math.floor(tempValue)}</h3>
+                    <h3 className="text-[105px] font-bold leading-none tracking-tighter">{Math.floor(tempValue)}</h3>
                     <div className="flex flex-col ml-1 items-start justify-center">
-                        <span className="text-[43px] font-bold mb-2">°C</span>
-                        <span className="text-[43px] font-bold leading-none">,{ (tempValue % 1).toFixed(1).split('.')[1] }</span>
+                        <span className="text-[36px] font-bold mb-1">°C</span>
+                        <span className="text-[36px] font-bold leading-none">,{ (tempValue % 1).toFixed(1).split('.')[1] }</span>
                     </div>
                 </div>
-                <p className="text-[55px] font-bold tracking-tight leading-none" style={{ color: curTemp.color }}>{curTemp.label}</p>
+                <p className="text-[44px] font-bold tracking-tight leading-none mt-2" style={{ color: curTemp.color }}>{curTemp.label}</p>
             </div>
           </div>
 
-          {/* PAGE ANALYTICS PANEL */}
-          <div className="w-full flex flex-col items-center mb-6 max-w-[420px]">
+          {/* ANALYTICS METRICS 24H */}
+          <div className="w-full flex flex-col items-center mb-4 max-w-[420px] mx-auto">
             <span className="text-[10px] font-black tracking-widest text-white/40 uppercase mb-2">
               Analytics Metrics (Last 24h)
             </span>
-            <div className="w-full flex justify-center gap-4 bg-black/20 px-6 py-3 rounded-2xl border border-white/5 backdrop-blur-sm shadow-inner">
+            <div className="w-full flex justify-center gap-4 bg-black/20 px-6 py-2.5 rounded-2xl border border-white/5 backdrop-blur-sm shadow-inner">
               <div className="text-center flex-1">
                 <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-0.5">Average</span>
                 <span className="text-sm font-extrabold text-[#d8db26]">{avgTemp.toFixed(1)}°C</span>
@@ -279,8 +303,9 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="w-full border-t border-white/10 pt-6">
-            <div className="flex justify-center gap-6">
+          {/* LEGEND SUHU */}
+          <div className="w-full border-t border-white/10 pt-5">
+            <div className="flex flex-wrap justify-center gap-4 sm:gap-6">
               <LegendItem color="#2ac764" label={`Normal < ${settings.temp?.warn || 80}°C`} />
               <LegendItem color="#d8db26" label={`${settings.temp?.warn || 80}°C < Caution < ${settings.temp?.crit || 120}°C`} />
               <LegendItem color="#cb6060" label={`Critical > ${settings.temp?.crit || 120}°C`} />
@@ -288,63 +313,107 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* HUMIDITY & OIL COLOR LAYER */}
-        <div className="lg:col-span-7 flex flex-col gap-8">
-          {/* HUMIDITY */}
-          <div className="bg-[#2D365E] rounded-[50px] p-10 flex-1 shadow-2xl flex flex-col justify-center border border-white/5">
-            <div className="flex items-center gap-3 w-full justify-center mb-8">
-              <Image src="/icons/humidity.png?v=1" alt="Humidity" width={44} height={44} unoptimized />
-              <h2 className="text-[28px] font-black tracking-tight text-center">Relative Humidity</h2>
-            </div>
-            <div className="px-4">
-              <div className="w-full h-16 bg-white/10 rounded-full relative overflow-hidden flex items-center mb-6">
-                <div className="h-full flex items-center justify-center text-3xl font-black transition-all duration-1000 shadow-lg text-white" style={{ width: `${humidityValue}%`, backgroundColor: getHumidityColor(humidityValue) }}>
-                  {humidityValue}%
-                </div>
-              </div>
-              <div className="flex justify-between px-6 text-3xl font-bold mb-6">
-                <span style={{ color: '#cb6060', opacity: humidityValue <= (settings.humidity?.dry || 60) ? 1 : 0.2 }}>Dry</span>
-                <span style={{ color: '#2ac764', opacity: (humidityValue > (settings.humidity?.dry || 60) && humidityValue <= (settings.humidity?.wet || 80)) ? 1 : 0.2 }}>Normal</span>
-                <span style={{ color: '#2ac7c7', opacity: humidityValue > (settings.humidity?.wet || 80) ? 1 : 0.2 }}>Wet</span>
-              </div>
-              <div className="flex justify-center gap-6 border-t border-white/10 pt-6">
-                <LegendItem color="#cb6060" label={`Dry < ${settings.humidity?.dry || 60}%`} />
-                <LegendItem color="#2ac764" label={`${settings.humidity?.dry || 60}% < Normal < ${settings.humidity?.wet || 80}%`} />
-                <LegendItem color="#2ac7c7" label={`Wet > ${settings.humidity?.wet || 80}%`} />
-              </div>
+        {/* CARD WARNA MINYAK LENGKAP DENGAN DATA OPTIK */}
+        <div className="bg-[#2D365E] rounded-[50px] p-8 sm:p-10 flex flex-col justify-between shadow-2xl relative min-h-[700px] border border-white/5">
+          <div className="flex items-center gap-3 w-full justify-center mb-2">
+            <Image src="/icons/oil-color.png?v=1" alt="Oil" width={40} height={40} unoptimized />
+            <h2 className="text-[22px] font-black tracking-tight text-center">Oil Transformer Color & Optical Health</h2>
+          </div>
+
+          {/* HALF GAUGE PERSENTASE */}
+          <div className="relative w-full h-[220px] flex justify-center items-end overflow-hidden my-2">
+            <div className="w-[500px] h-[210px]">{renderGauge(oilColorValue, 100, curOil.color, true, 22)}</div>
+            <div className="absolute bottom-1 flex flex-col items-center justify-center text-center">
+              <div className="font-bold text-[85px] leading-none">{oilColorValue}%</div>
+              <p className="text-[28px] font-bold tracking-tight leading-none mt-2" style={{ color: curOil.color }}>{curOil.label}</p>
             </div>
           </div>
 
-          {/* OIL COLOR */}
-          <div className="bg-[#2D365E] rounded-[50px] p-10 flex-1 shadow-2xl flex flex-col items-center justify-center border border-white/5">
-             <div className="flex items-center gap-3 w-full justify-center mb-4">
-                <Image src="/icons/oil-color.png?v=1" alt="Oil" width={44} height={44} unoptimized />
-                <h2 className="text-[28px] font-black tracking-tight text-center">Oil Transformer Color</h2>
-             </div>
-             <div className="relative w-full h-[240px] flex justify-center items-end overflow-hidden">
-                <div className="w-[600px] h-[220px]">{renderGauge(oilColorValue, 100, oilColorValue > (settings.oil?.crit || 66) ? '#cb6060' : oilColorValue > (settings.oil?.warn || 33) ? '#d8db26' : '#2ac764', true, 22)}</div>
-                <div className="absolute bottom-2 flex flex-col items-center justify-center text-center">
-                    <div className="font-bold text-[85px] leading-none mb-4">{oilColorValue}%</div>
+          {/* STATUS LABEL */}
+          <div className="flex justify-center mb-4">
+            <div className="text-[13px] font-extrabold uppercase tracking-wider text-white/70 bg-black/25 px-5 py-1.5 rounded-full border border-white/5 backdrop-blur-sm shadow-inner text-center">
+              {getOilColorLabel(oilColorValue)}
+            </div>
+          </div>
+
+          {/* OPTICAL HEALTH CHAMBER METRICS (RGB, ASTM, REGRESI) */}
+          <div className="w-full max-w-[500px] mx-auto bg-black/20 p-4 rounded-3xl border border-white/5 shadow-inner mb-4">
+            <span className="text-[9px] font-black tracking-widest text-cyan-400 uppercase block text-center mb-3">
+              TCS34725 Optical Chamber Spectroscopy Analysis
+            </span>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              
+              {/* RGB METRIC BOX */}
+              <div className="bg-white/5 p-3 rounded-2xl border border-white/5 flex flex-col items-center justify-center">
+                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Color Vector</span>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <div className="w-3.5 h-3.5 rounded-full border border-white/40 shadow-sm" style={{ backgroundColor: `rgb(${oilR}, ${oilG}, ${oilB})` }}></div>
+                  <span className="text-xs font-black font-mono text-white">RGB</span>
                 </div>
-             </div>
-             <div className="flex gap-12 font-bold text-3xl mt-4 mb-4">
-                <span style={{ color: '#2ac764', opacity: oilColorValue <= (settings.oil?.warn || 33) ? 1 : 0.2 }}>Normal</span>
-                <span style={{ color: '#d8db26', opacity: (oilColorValue > (settings.oil?.warn || 33) && oilColorValue <= (settings.oil?.crit || 66)) ? 1 : 0.2 }}>Caution</span>
-                <span style={{ color: '#cb6060', opacity: oilColorValue > (settings.oil?.crit || 66) ? 1 : 0.2 }}>Critical</span>
-             </div>
-              <div className="text-[17px] font-extrabold uppercase tracking-wide mb-5 text-white/50 bg-black/20 px-4 py-1 rounded-full border border-white/5 backdrop-blur-sm">
-                      {getOilColorLabel(oilColorValue)}
+                <span className="text-[10px] font-mono font-bold text-white/80">{oilR}, {oilG}, {oilB}</span>
               </div>
-             <div className="flex justify-center gap-6 border-t border-white/10 pt-6 w-full">
-                <LegendItem color="#2ac764" label={`Normal < ${settings.oil?.warn || 33}%`} />
-                <LegendItem color="#d8db26" label={`${settings.oil?.warn || 33}% < Caution < ${settings.oil?.crit || 66}%`} />
-                <LegendItem color="#cb6060" label={`Critical > ${settings.oil?.crit || 66}%`} />
-             </div>
+
+              {/* ASTM D1500 SCALE BOX */}
+              <div className="bg-white/5 p-3 rounded-2xl border border-white/5 flex flex-col items-center justify-center">
+                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-1">ASTM D1500</span>
+                <span className="text-lg font-black font-mono text-cyan-300 leading-tight mb-0.5">{Number(oilAstmScale).toFixed(1)}</span>
+                <span className="text-[9px] font-bold text-gray-400 uppercase">Scale Index</span>
+              </div>
+
+              {/* REGRESSION Y BOX */}
+              <div className="bg-white/5 p-3 rounded-2xl border border-white/5 flex flex-col items-center justify-center">
+                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Regression (y)</span>
+                <span className="text-sm font-black font-mono text-purple-300 leading-tight mb-0.5">{Number(oilRegY).toFixed(4)}</span>
+                <span className="text-[9px] font-bold text-gray-400 uppercase">Fitted Model</span>
+              </div>
+
+            </div>
+          </div>
+
+          {/* LEGEND WARNA MINYAK */}
+          <div className="w-full border-t border-white/10 pt-5">
+            <div className="flex flex-wrap justify-center gap-4 sm:gap-6">
+              <LegendItem color="#2ac764" label={`Normal < ${settings.oil?.warn || 33}%`} />
+              <LegendItem color="#d8db26" label={`${settings.oil?.warn || 33}% < Caution < ${settings.oil?.crit || 66}%`} />
+              <LegendItem color="#cb6060" label={`Critical > ${settings.oil?.crit || 66}%`} />
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* 3. RELATIVE HUMIDITY ROW (BARIS BARU PENUH) */}
+      <div className="bg-[#2D365E] rounded-[50px] p-8 sm:p-10 shadow-2xl border border-white/5 mb-10 text-white">
+        <div className="flex items-center gap-3 w-full justify-center mb-6">
+          <Image src="/icons/humidity.png?v=1" alt="Humidity" width={40} height={40} unoptimized />
+          <h2 className="text-[24px] font-black tracking-tight text-center">Relative Humidity (Enclosure & Environment)</h2>
+        </div>
+
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="w-full h-14 bg-white/10 rounded-full relative overflow-hidden flex items-center mb-5">
+            <div 
+              className="h-full flex items-center justify-center text-2xl font-black transition-all duration-1000 shadow-lg text-white" 
+              style={{ width: `${Math.max(12, humidityValue)}%`, backgroundColor: getHumidityColor(humidityValue) }}
+            >
+              {humidityValue}%
+            </div>
+          </div>
+
+          <div className="flex justify-between px-6 text-2xl font-bold mb-6">
+            <span style={{ color: '#cb6060', opacity: humidityValue <= (settings.humidity?.dry || 60) ? 1 : 0.2 }}>Dry</span>
+            <span style={{ color: '#2ac764', opacity: (humidityValue > (settings.humidity?.dry || 60) && humidityValue <= (settings.humidity?.wet || 80)) ? 1 : 0.2 }}>Normal</span>
+            <span style={{ color: '#2ac7c7', opacity: humidityValue > (settings.humidity?.wet || 80) ? 1 : 0.2 }}>Wet</span>
+          </div>
+
+          <div className="flex flex-wrap justify-center gap-6 border-t border-white/10 pt-5">
+            <LegendItem color="#cb6060" label={`Dry < ${settings.humidity?.dry || 60}%`} />
+            <LegendItem color="#2ac764" label={`${settings.humidity?.dry || 60}% < Normal < ${settings.humidity?.wet || 80}%`} />
+            <LegendItem color="#2ac7c7" label={`Wet > ${settings.humidity?.wet || 80}%`} />
           </div>
         </div>
       </div>
 
-      {/* FLOOD EARLY WARNING SYSTEM */}
+      {/* 4. FLOOD EARLY WARNING SYSTEM */}
       <div className="bg-white rounded-[50px] p-10 shadow-2xl border border-gray-100 flex flex-col relative overflow-hidden text-[#2D365E]">
         <div className="flex items-center gap-4 justify-center mb-6 text-3xl font-black">
           <Image src="/icons/flood.png?v=1" alt="Flood" width={40} height={40} unoptimized /> 

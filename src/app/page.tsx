@@ -317,7 +317,7 @@ export default function DashboardPage() {
         <div className="bg-[#2D365E] rounded-[50px] p-8 sm:p-10 flex flex-col justify-between shadow-2xl relative min-h-[700px] border border-white/5">
           <div className="flex items-center gap-3 w-full justify-center mb-2">
             <Image src="/icons/oil-color.png?v=1" alt="Oil" width={40} height={40} unoptimized />
-            <h2 className="text-[22px] font-black tracking-tight text-center">Oil Transformer Color & Optical Health</h2>
+            <h2 className="text-[22px] font-black tracking-tight text-center">Oil Transformer Color</h2>
           </div>
 
           {/* HALF GAUGE PERSENTASE */}
@@ -386,7 +386,7 @@ export default function DashboardPage() {
       <div className="bg-[#2D365E] rounded-[50px] p-8 sm:p-10 shadow-2xl border border-white/5 mb-10 text-white">
         <div className="flex items-center gap-3 w-full justify-center mb-6">
           <Image src="/icons/humidity.png?v=1" alt="Humidity" width={40} height={40} unoptimized />
-          <h2 className="text-[24px] font-black tracking-tight text-center">Relative Humidity (Enclosure & Environment)</h2>
+          <h2 className="text-[24px] font-black tracking-tight text-center">Relative Humidity</h2>
         </div>
 
         <div className="max-w-4xl mx-auto px-4">

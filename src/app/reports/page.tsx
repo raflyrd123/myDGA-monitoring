@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   Download, FileSpreadsheet, AlertCircle, Calendar, ArrowUpDown, 
-  ChevronLeft, ChevronRight, Hash, ChevronDown, Trash2, ArrowRight, Activity 
+  ChevronLeft, ChevronRight, Hash, ChevronDown, Trash2, ArrowRight, Activity, ShieldCheck, AlertTriangle, Flame 
 } from 'lucide-react';
 
 export default function ReportsPage() {
@@ -21,13 +21,78 @@ export default function ReportsPage() {
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const rowsPerPage = 10; 
 
-  // Water level calibration settings state
+  // Calibration settings state
   const [settings, setSettings] = useState<any>(null);
 
   // Page jump & export dropdown state
   const [pageInput, setPageInput] = useState<string>('');
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // =========================================================
+  // AUTOMATED DGA DIAGNOSTIC ENGINE (IEEE C57.104 & IEC 60599)
+  // =========================================================
+  const calculateDGADiagnosis = (log: any) => {
+    const h2 = Number(log.hydrogen_h2 || 0);
+    const co = Number(log.carbon_monoxide_co || 0);
+    const ch4 = Number(log.methane_ch4 || 0);
+    const c2h4 = Number(log.ethylene_c2h4 || 0);
+    const c2h2 = Number(log.acetylene_c2h2 || 0);
+    const c2h6 = Number(log.ethane_c2h6 || 0);
+    const temp = Number(log.temperature_c || 0);
+
+    const tdcg = h2 + co + ch4 + c2h4 + c2h2 + c2h6;
+
+    let diagnosis = "NORMAL (NO FAULT)";
+    let severity: 'normal' | 'caution' | 'critical' = 'normal';
+
+    // 1. Critical Electrical Arcing
+    if (c2h2 >= 2.0) {
+      diagnosis = "ARCING (D2)";
+      severity = "critical";
+    } 
+    // 2. High-Temperature Thermal Fault (>700°C)
+    else if (c2h4 >= 50 || (c2h6 > 0 && (c2h4 / c2h6) > 1.0 && c2h4 > 20)) {
+      diagnosis = "THERMAL FAULT >700°C (T3)";
+      severity = "critical";
+    }
+    // 3. Medium-Temperature Thermal Fault (300-700°C)
+    else if (c2h6 >= 65 || (temp >= 85 && (ch4 > 50 || c2h4 > 20))) {
+      diagnosis = "THERMAL FAULT 300-700°C (T2)";
+      severity = "caution";
+    }
+    // 4. Low-Temperature Thermal Fault (<300°C)
+    else if (ch4 >= 120) {
+      diagnosis = "THERMAL FAULT <300°C (T1)";
+      severity = "caution";
+    }
+    // 5. Partial Discharge (Corona)
+    else if (h2 >= 100) {
+      diagnosis = "PARTIAL DISCHARGE (PD)";
+      severity = "caution";
+    }
+    // 6. Paper / Cellulose Insulation Overheating
+    else if (co >= 350) {
+      diagnosis = "CELLULOSE DEGRADATION";
+      severity = "caution";
+    }
+    // 7. TDCG Threshold Evaluation (IEEE Std C57.104)
+    else if (tdcg > 1920) {
+      diagnosis = "ELEVATED COMBUSTIBLE GAS";
+      severity = "critical";
+    } else if (tdcg > 720) {
+      diagnosis = "MODERATE GAS EVOLUTION";
+      severity = "caution";
+    }
+
+    // High Temperature Thermal Overload Modifier
+    if (temp >= 85 && severity !== 'critical') {
+      diagnosis += " + OVERHEAT";
+      severity = "critical";
+    }
+
+    return { tdcg: Number(tdcg.toFixed(1)), diagnosis, severity };
+  };
 
   useEffect(() => {
     fetchAvailableArchives();
@@ -41,7 +106,6 @@ export default function ReportsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Timestamp formatting helper
   const formatWaktu = (ts: any) => {
     if (!ts || ts === '-') return '-';
     if (!isNaN(Number(ts)) && String(ts).length >= 10) {
@@ -149,6 +213,9 @@ export default function ReportsPage() {
       const sensorReading = log.water_level_cm || 0;
       const actualWaterHeightCm = Math.max(0, baseline - sensorReading);
 
+      // Automated DGA calculation
+      const dgaEval = calculateDGADiagnosis(log);
+
       // Latency calculation
       let latency = 0;
       if (log.timestamp_kirim && log.timestamp_kirim !== '-') {
@@ -162,7 +229,6 @@ export default function ReportsPage() {
         }
       }
 
-      // Dynamic Payload Size & Throughput calculation
       const rawPayloadString = `${log.temperature_c ?? 0},${log.humidity_pct ?? 0},${log.water_level_cm ?? 0},${log.safety_float || 'OFF'},${log.packet_id || 0},${log.timestamp_kirim || ''}\n`;
       const payloadSizeBytes = new TextEncoder().encode(rawPayloadString).length;
       const latencyInSeconds = latency / 1000;
@@ -173,6 +239,9 @@ export default function ReportsPage() {
 
       return {
         ...log,
+        tdcg: dgaEval.tdcg,
+        dga_diagnosis: dgaEval.diagnosis,
+        dga_severity: dgaEval.severity,
         water_level_actual: actualWaterHeightCm,
         latency,
         rssi: log.lora_rssi ?? 0,
@@ -286,7 +355,9 @@ export default function ReportsPage() {
 
   const generateCSV = (dataList: any[], filename: string) => {
     const headers = [
-      "Sent Time", "Received Time", "Packet ID", "H2 (ppm)", "CO (ppm)", "NH3 (ppm)", "CH4 (ppm)", 
+      "Sent Time", "Received Time", "Packet ID",
+      "TDCG (ppm)", "DGA Diagnosis (IEEE/IEC)",
+      "H2 (ppm)", "CO (ppm)", "NH3 (ppm)", "CH4 (ppm)", 
       "C3H8 (ppm)", "C4H10 (ppm)", "C2H4 (ppm)", "C2H2 (ppm)", "C2H6 (ppm)", 
       "Temperature (C)", "Humidity (%)", "Oil Color (%)", 
       "Oil R", "Oil G", "Oil B", "ASTM Scale", "Regression (y)",
@@ -294,23 +365,28 @@ export default function ReportsPage() {
       "Latency (ms)", "RSSI (dBm)", "SNR (dB)", "Throughput (bps)"
     ];
     
-    const rows = dataList.map(log => [
-      `"${formatWaktu(log.timestamp_kirim)}"`,
-      `"${new Date(log.created_at).toLocaleString('en-US')}"`,
-      log.packet_id ? `PKT-${String(log.packet_id).padStart(3, '0')}` : '-',
-      log.hydrogen_h2 ?? 0, log.carbon_monoxide_co ?? 0, log.ammonia_nh3 ?? 0, log.methane_ch4 ?? 0,
-      log.propane_c3h8 ?? 0, log.butane_c4h10 ?? 0, log.ethylene_c2h4 ?? 0, log.acetylene_c2h2 ?? 0, log.ethane_c2h6 ?? 0,
-      log.temperature_c ?? 0, log.humidity_pct ?? 0, log.oil_color_pct ?? 0,
-      log.oil_r ?? 0, log.oil_g ?? 0, log.oil_b ?? 0,
-      log.oil_astm_scale !== undefined && log.oil_astm_scale !== null ? Number(log.oil_astm_scale).toFixed(1) : 0.5,
-      log.oil_regression_y !== undefined && log.oil_regression_y !== null ? Number(log.oil_regression_y).toFixed(4) : 0,
-      log.water_level_actual !== undefined ? log.water_level_actual.toFixed(2) : (log.water_level_cm ?? 0), 
-      log.safety_float || '-',
-      log.latency ? log.latency.toFixed(0) : 0,
-      log.rssi ?? 0,
-      log.snr ? log.snr.toFixed(1) : 0,
-      log.throughput ? log.throughput.toFixed(2) : 0
-    ]);
+    const rows = dataList.map(log => {
+      const dgaEval = calculateDGADiagnosis(log);
+      return [
+        `"${formatWaktu(log.timestamp_kirim)}"`,
+        `"${new Date(log.created_at).toLocaleString('en-US')}"`,
+        log.packet_id ? `PKT-${String(log.packet_id).padStart(3, '0')}` : '-',
+        dgaEval.tdcg,
+        `"${dgaEval.diagnosis}"`,
+        log.hydrogen_h2 ?? 0, log.carbon_monoxide_co ?? 0, log.ammonia_nh3 ?? 0, log.methane_ch4 ?? 0,
+        log.propane_c3h8 ?? 0, log.butane_c4h10 ?? 0, log.ethylene_c2h4 ?? 0, log.acetylene_c2h2 ?? 0, log.ethane_c2h6 ?? 0,
+        log.temperature_c ?? 0, log.humidity_pct ?? 0, log.oil_color_pct ?? 0,
+        log.oil_r ?? 0, log.oil_g ?? 0, log.oil_b ?? 0,
+        log.oil_astm_scale !== undefined && log.oil_astm_scale !== null ? Number(log.oil_astm_scale).toFixed(1) : 0.5,
+        log.oil_regression_y !== undefined && log.oil_regression_y !== null ? Number(log.oil_regression_y).toFixed(4) : 0,
+        log.water_level_actual !== undefined ? log.water_level_actual.toFixed(2) : (log.water_level_cm ?? 0), 
+        log.safety_float || '-',
+        log.latency ? log.latency.toFixed(0) : 0,
+        log.rssi ?? 0,
+        log.snr ? log.snr.toFixed(1) : 0,
+        log.throughput ? log.throughput.toFixed(2) : 0
+      ];
+    });
 
     const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -356,6 +432,8 @@ export default function ReportsPage() {
 
     const processedMaster = masterLogs.map(log => {
       const baseline = settings?.flood?.groundDistance || 100;
+      const dgaEval = calculateDGADiagnosis(log);
+
       let latency = 0;
       if (log.timestamp_kirim && log.timestamp_kirim !== '-') {
         const strTs = String(log.timestamp_kirim).trim();
@@ -378,6 +456,9 @@ export default function ReportsPage() {
 
       return {
         ...log,
+        tdcg: dgaEval.tdcg,
+        dga_diagnosis: dgaEval.diagnosis,
+        dga_severity: dgaEval.severity,
         water_level_actual: Math.max(0, baseline - (log.water_level_cm || 0)),
         latency,
         rssi: log.lora_rssi ?? 0,
@@ -501,14 +582,15 @@ export default function ReportsPage() {
 
           {/* HIGH-END RESPONSIVE MASTER TABLE */}
           <div className="overflow-x-auto w-full mb-6 rounded-2xl border border-gray-100 shadow-inner">
-            <table className="w-full text-left border-collapse min-w-[2800px]">
+            <table className="w-full text-left border-collapse min-w-[3200px]">
               <thead>
                 {/* TOP CATEGORY GROUPING HEADER */}
                 <tr className="bg-[#2D365E] text-white text-[9px] font-black uppercase tracking-[0.2em] text-center border-b border-white/10">
                   <th colSpan={5} className="py-2.5 border-r border-white/10">1. Transmission & Log Info</th>
-                  <th colSpan={9} className="py-2.5 border-r border-white/10 bg-[#252d4e]">2. DGA Gas Dissolved Analysis</th>
-                  <th colSpan={8} className="py-2.5 border-r border-white/10">3. Transformer & Oil Optical Health</th>
-                  <th colSpan={4} className="py-2.5 border-r border-white/10 bg-[#1e2544]">4. LoRa Communication QoS</th>
+                  <th colSpan={2} className="py-2.5 border-r border-white/10 bg-[#1e2544] text-cyan-400">2. Automated DGA IEEE/IEC Diagnostic</th>
+                  <th colSpan={9} className="py-2.5 border-r border-white/10 bg-[#252d4e]">3. DGA Gas Dissolved Analysis</th>
+                  <th colSpan={8} className="py-2.5 border-r border-white/10">4. Transformer & Optical Chamber Health</th>
+                  <th colSpan={4} className="py-2.5 border-r border-white/10 bg-[#1e2544]">5. LoRa Communication QoS</th>
                   <th colSpan={1} className="py-2.5">Action</th>
                 </tr>
 
@@ -533,6 +615,10 @@ export default function ReportsPage() {
                   <th className="p-3.5 whitespace-nowrap">Received Time</th>
                   <th className="p-3.5 text-center whitespace-nowrap">Packet ID</th>
                   <th className="p-3.5 text-center whitespace-nowrap border-r border-gray-200">Transmission Path</th>
+
+                  {/* DGA AUTOMATED DIAGNOSIS */}
+                  <th className="p-3.5 text-center whitespace-nowrap bg-indigo-50/40 text-indigo-900">TDCG (ppm)</th>
+                  <th className="p-3.5 text-center whitespace-nowrap bg-indigo-50/40 text-indigo-900 border-r border-gray-200">IEEE/IEC Fault Status</th>
 
                   {/* DGA GASES */}
                   <th className="p-3.5 text-center whitespace-nowrap">H2</th>
@@ -568,7 +654,7 @@ export default function ReportsPage() {
               <tbody className="text-xs font-bold divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={27} className="p-20 text-center animate-pulse font-black text-gray-300 text-lg tracking-widest">
+                    <td colSpan={29} className="p-20 text-center animate-pulse font-black text-gray-300 text-lg tracking-widest">
                       LOADING MASTER TELEMETRY DATA...
                     </td>
                   </tr>
@@ -615,6 +701,25 @@ export default function ReportsPage() {
                         </div>
                       </td>
 
+                      {/* DGA AUTOMATED DIAGNOSIS RESULTS */}
+                      <td className="p-3.5 text-center font-mono font-black text-[#2D365E] bg-indigo-50/20">
+                        {log.tdcg} <span className="text-[9px] text-gray-400 font-sans">ppm</span>
+                      </td>
+                      <td className="p-3.5 text-center border-r border-gray-100 bg-indigo-50/20 whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-sm ${
+                          log.dga_severity === 'critical'
+                            ? 'bg-red-100 text-red-700 border border-red-300'
+                            : log.dga_severity === 'caution'
+                            ? 'bg-amber-100 text-amber-700 border border-amber-300'
+                            : 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                        }`}>
+                          {log.dga_severity === 'critical' && <Flame className="w-3 h-3 text-red-600" />}
+                          {log.dga_severity === 'caution' && <AlertTriangle className="w-3 h-3 text-amber-600" />}
+                          {log.dga_severity === 'normal' && <ShieldCheck className="w-3 h-3 text-emerald-600" />}
+                          {log.dga_diagnosis}
+                        </span>
+                      </td>
+
                       {/* DGA GASES (PPM) */}
                       <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.hydrogen_h2 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
                       <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.carbon_monoxide_co ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
@@ -627,7 +732,7 @@ export default function ReportsPage() {
                       <td className="p-3.5 text-center text-[#2D365E] font-mono border-r border-gray-100">{log.ethane_c2h6 ?? 0} <span className="text-[9px] text-gray-400 font-sans">ppm</span></td>
 
                       {/* ENVIRONMENT & HEALTH */}
-                      <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.temperature_c ?? 0}°C</td>
+                      <td className="p-3.5 text-center text-[#2D365E] font-mono font-black">{log.temperature_c ?? 0}°C</td>
                       <td className="p-3.5 text-center text-[#2D365E] font-mono">{log.humidity_pct ?? 0}%</td>
                       <td className="p-3.5 text-center text-[#2D365E] font-mono font-black">{log.oil_color_pct ?? 0}%</td>
                       
@@ -675,7 +780,7 @@ export default function ReportsPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={27} className="p-20 text-center font-black text-gray-300 text-lg tracking-widest">
+                    <td colSpan={29} className="p-20 text-center font-black text-gray-300 text-lg tracking-widest">
                       NO DATA AVAILABLE FOR THIS MONTH
                     </td>
                   </tr>
